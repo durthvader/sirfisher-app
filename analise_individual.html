@@ -149,7 +149,7 @@ function tituloCase(s){
 async function carregar(){
   content.innerHTML = '<div class="state">Carregando…</div>';
   const [{data: itens, error: e1}, {data: categorias, error: e2}] = await Promise.all([
-    sb.from('analise_individual').select('*').order('data_caixa', {ascending:false}),
+    sb.from('analise_individual').select('*').order('valor', {ascending:true}),
     sb.from('categoria_dre').select('categoria, dre_grupo, natureza').order('categoria')
   ]);
 
