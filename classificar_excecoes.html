@@ -57,7 +57,12 @@
   .meta{font-family:var(--mono); font-size:11.5px; color:var(--ink-dim); margin-top:4px; display:flex; gap:10px; flex-wrap:wrap;}
   .meta .doc{opacity:.8;}
   .meta .data{color:var(--accent);}
-  .valor{font-family:var(--mono); font-size:13.5px; color:var(--danger); white-space:nowrap; text-align:right;}
+  .valor{font-family:var(--mono); font-size:13.5px; white-space:nowrap; text-align:right;}
+  .valor.receita{color:var(--accent);}
+  .valor.despesa{color:var(--danger);}
+  .tag{font-family:var(--mono); font-size:10px; padding:1px 6px; border-radius:6px; letter-spacing:.3px;}
+  .tag-rec{color:var(--accent); border:1px solid var(--accent);}
+  .tag-desp{color:var(--danger); border:1px solid var(--danger);}
   .valor .qtd{display:block; color:var(--ink-dim); font-size:10.5px; margin-top:2px;}
 
   .controls{grid-column:1 / -1; display:flex; gap:8px; align-items:center;}
@@ -145,7 +150,7 @@ async function carregar(){
   content.innerHTML = '<div class="state">Carregando…</div>';
   const [{data: excecoes, error: e1}, {data: categorias, error: e2}] = await Promise.all([
     sb.from('excecoes').select('*').order('total', {ascending:true}),
-    sb.from('categoria_dre').select('categoria, dre_grupo').order('categoria')
+    sb.from('categoria_dre').select('categoria, dre_grupo, natureza').order('categoria')
   ]);
 
   if (e1 || e2) {
@@ -174,9 +179,22 @@ function linha(exc, categorias){
   const el = document.createElement('div');
   el.className = 'row';
 
-  const opcoes = categorias.map(c =>
+  // Filtra as categorias pela natureza da excecao:
+  // Despesa -> mostra Despesa + Contabil + Ambos ; Receita -> Receita + Contabil + Ambos
+  const permitidas = exc.natureza === 'Receita'
+    ? ['Receita', 'Contabil', 'Ambos']
+    : ['Despesa', 'Contabil', 'Ambos'];
+  const cats = categorias.filter(c => permitidas.includes(c.natureza));
+  const opcoes = cats.map(c =>
     `<option value="${c.categoria}">${c.categoria} · ${c.dre_grupo}</option>`
   ).join('');
+
+  const ehReceita = (exc.total || 0) >= 0;
+  const sinal = ehReceita ? '+' : '−';
+  const classeValor = ehReceita ? 'valor receita' : 'valor despesa';
+  const selo = ehReceita
+    ? '<span class="tag tag-rec">Receita</span>'
+    : '<span class="tag tag-desp">Despesa</span>';
 
   el.innerHTML = `
     <div class="info">
@@ -184,9 +202,10 @@ function linha(exc, categorias){
       <div class="meta">
         <span class="doc">${exc.chave_tipo === 'cnpj' ? 'CNPJ ' + (exc.contraparte_doc||'') : 'pessoa física'}</span>
         <span class="data">${fmtData(exc.data_min, exc.data_max)}</span>
+        ${selo}
       </div>
     </div>
-    <div class="valor">${fmtMoeda(exc.total)}<span class="qtd">${exc.qtd_lancamentos}x</span></div>
+    <div class="${classeValor}">${sinal} ${fmtMoeda(exc.total)}<span class="qtd">${exc.qtd_lancamentos}x</span></div>
     <div class="controls">
       <select class="unselected">
         <option value="" disabled selected>Escolher categoria…</option>
