@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sir Fisher · Classificar exceções</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --bg:#11161c;
+    --panel:#161d26;
+    --panel-border:#262f3b;
+    --ink:#e9edf2;
+    --ink-dim:#8d9aab;
+    --accent:#3fb88f;
+    --accent-dim:#2a3f3a;
+    --danger:#d9745a;
+    --mono: "SF Mono", "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+    --sans: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:var(--sans); -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:760px; margin:0 auto; padding:28px 20px 80px;}
+  header{display:flex; align-items:baseline; justify-content:space-between; margin-bottom:4px; flex-wrap:wrap; gap:8px;}
+  h1{font-size:18px; font-weight:600; margin:0; letter-spacing:.2px;}
+  .badge{
+    font-family:var(--mono); font-size:11px; color:var(--ink-dim);
+    border:1px solid var(--panel-border); border-radius:20px; padding:3px 10px;
+  }
+  .sub{color:var(--ink-dim); font-size:13px; margin:4px 0 24px;}
+  .sub b{color:var(--ink); font-weight:600;}
+
+  .state{padding:40px 0; text-align:center; color:var(--ink-dim); font-size:14px;}
+  .state.error{color:var(--danger);}
+
+  .empty{
+    text-align:center; padding:56px 20px; border:1px dashed var(--panel-border);
+    border-radius:14px; color:var(--ink-dim);
+  }
+  .empty .big{font-size:32px; margin-bottom:10px;}
+  .empty p{margin:6px 0 0; font-size:14px;}
+
+  .row{
+    background:var(--panel); border:1px solid var(--panel-border); border-radius:12px;
+    padding:14px 16px; margin-bottom:10px;
+    display:grid; grid-template-columns:1fr auto; gap:10px 16px; align-items:center;
+    transition:opacity .35s ease, transform .35s ease;
+  }
+  .row.saving{opacity:.4;}
+  .row.done{opacity:0; transform:scale(.97); }
+
+  .info{min-width:0;}
+  .nome{font-weight:600; font-size:14.5px; line-height:1.3; word-break:break-word;}
+  .meta{font-family:var(--mono); font-size:11.5px; color:var(--ink-dim); margin-top:4px; display:flex; gap:10px; flex-wrap:wrap;}
+  .meta .doc{opacity:.8;}
+  .valor{font-family:var(--mono); font-size:13.5px; color:var(--danger); white-space:nowrap; text-align:right;}
+  .valor .qtd{display:block; color:var(--ink-dim); font-size:10.5px; margin-top:2px;}
+
+  .controls{grid-column:1 / -1; display:flex; gap:8px; align-items:center;}
+  select{
+    flex:1; background:#0d1217; color:var(--ink); border:1px solid var(--panel-border);
+    border-radius:8px; padding:9px 10px; font-size:13.5px; font-family:var(--sans);
+    appearance:none;
+    background-image:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="%238d9aab" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>');
+    background-repeat:no-repeat; background-position:right 10px center; padding-right:30px;
+  }
+  select:focus{outline:none; border-color:var(--accent);}
+  select.unselected{color:var(--ink-dim);}
+
+  button.save{
+    background:var(--accent); color:#0d1410; border:none; border-radius:8px;
+    padding:9px 16px; font-size:13.5px; font-weight:600; cursor:pointer;
+    white-space:nowrap; transition:filter .15s;
+  }
+  button.save:hover{filter:brightness(1.08);}
+  button.save:disabled{background:var(--panel-border); color:var(--ink-dim); cursor:not-allowed;}
+
+  .toast{
+    position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(20px);
+    background:var(--accent); color:#0d1410; font-size:13px; font-weight:600;
+    padding:10px 18px; border-radius:30px; opacity:0; transition:opacity .25s, transform .25s;
+    pointer-events:none; box-shadow:0 6px 24px rgba(0,0,0,.3);
+  }
+  .toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
+  .toast.err{background:var(--danger);}
+
+  footer{text-align:center; color:var(--ink-dim); font-size:11.5px; margin-top:30px; font-family:var(--mono);}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Classificar exceções</h1>
+    <span class="badge" id="conta-badge">Sir Fisher</span>
+  </header>
+  <p class="sub">Fornecedores novos no extrato que ainda não têm categoria. <b id="contador">—</b></p>
+
+  <div id="content"><div class="state">Carregando…</div></div>
+
+  <footer>de_para · Supabase</footer>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// =====================================================================
+// Configuração de conexão (chave publica - so le categorias/de_para e
+// insere classificacoes; nao acessa dado financeiro nenhum)
+// =====================================================================
+const SUPABASE_URL = "https://qqefegpievdlaprwzktx.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFxZWZlZ3BpZXZkbGFwcnd6a3R4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI0ODQxNzAsImV4cCI6MjA5ODA2MDE3MH0.1h_585aBtTnXtA0FLtbNvhkYpVokgfHbUpKcAIBImKY";
+
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const content  = document.getElementById('content');
+const contador = document.getElementById('contador');
+const toastEl  = document.getElementById('toast');
+
+function toast(msg, isErr){
+  toastEl.textContent = msg;
+  toastEl.className = 'toast show' + (isErr ? ' err' : '');
+  setTimeout(()=> toastEl.className = 'toast', 2200);
+}
+
+function fmtMoeda(v){
+  return new Intl.NumberFormat('pt-BR', {style:'currency', currency:'BRL'}).format(Math.abs(v||0));
+}
+
+function tituloCase(s){
+  return (s||'').toLowerCase().split(' ').map(w => w ? w[0].toUpperCase()+w.slice(1) : w).join(' ');
+}
+
+async function carregar(){
+  content.innerHTML = '<div class="state">Carregando…</div>';
+  const [{data: excecoes, error: e1}, {data: categorias, error: e2}] = await Promise.all([
+    sb.from('excecoes').select('*').order('total', {ascending:true}),
+    sb.from('categoria_dre').select('categoria, dre_grupo').order('categoria')
+  ]);
+
+  if (e1 || e2) {
+    content.innerHTML = `<div class="state error">Não consegui carregar.<br>${(e1||e2).message}</div>`;
+    return;
+  }
+
+  contador.textContent = excecoes.length === 0
+    ? 'Nenhuma pendência.'
+    : `${excecoes.length} pendente${excecoes.length>1?'s':''}`;
+
+  if (excecoes.length === 0){
+    content.innerHTML = `
+      <div class="empty">
+        <div class="big">✓</div>
+        <p>Tudo classificado. Nenhum fornecedor novo no momento.</p>
+      </div>`;
+    return;
+  }
+
+  content.innerHTML = '';
+  excecoes.forEach(exc => content.appendChild(linha(exc, categorias)));
+}
+
+function linha(exc, categorias){
+  const el = document.createElement('div');
+  el.className = 'row';
+
+  const opcoes = categorias.map(c =>
+    `<option value="${c.categoria}">${c.categoria} · ${c.dre_grupo}</option>`
+  ).join('');
+
+  el.innerHTML = `
+    <div class="info">
+      <div class="nome">${exc.contraparte_nome || '(sem nome)'}</div>
+      <div class="meta">
+        <span class="doc">${exc.chave_tipo === 'cnpj' ? 'CNPJ ' + (exc.contraparte_doc||'') : 'pessoa física'}</span>
+      </div>
+    </div>
+    <div class="valor">${fmtMoeda(exc.total)}<span class="qtd">${exc.qtd_lancamentos}x</span></div>
+    <div class="controls">
+      <select class="unselected">
+        <option value="" disabled selected>Escolher categoria…</option>
+        ${opcoes}
+      </select>
+      <button class="save" disabled>Salvar</button>
+    </div>
+  `;
+
+  const select = el.querySelector('select');
+  const btn = el.querySelector('button.save');
+
+  select.addEventListener('change', () => {
+    select.classList.toggle('unselected', !select.value);
+    btn.disabled = !select.value;
+  });
+
+  btn.addEventListener('click', async () => {
+    const categoria = select.value;
+    if (!categoria) return;
+    el.classList.add('saving');
+    btn.disabled = true;
+
+    const { error } = await sb.from('de_para').insert({
+      chave_tipo: exc.chave_tipo,
+      chave_valor: exc.chave_valor,
+      fornecedor: tituloCase(exc.contraparte_nome),
+      categoria: categoria
+    });
+
+    if (error) {
+      el.classList.remove('saving');
+      btn.disabled = false;
+      toast('Não salvou: ' + error.message, true);
+      return;
+    }
+
+    toast('Classificado: ' + categoria);
+    el.classList.add('done');
+    setTimeout(() => {
+      el.remove();
+      const restantes = content.querySelectorAll('.row').length;
+      contador.textContent = restantes === 0 ? 'Nenhuma pendência.' : `${restantes} pendente${restantes>1?'s':''}`;
+      if (restantes === 0) carregar();
+    }, 350);
+  });
+
+  return el;
+}
+
+carregar();
+</script>
+</body>
+</html>
