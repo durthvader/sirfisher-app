@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sir Fisher · Sangria em Espécie</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --bg:#0b0e14; --card:#11151f; --border:#1f2733; --text:#e8edf5;
+    --muted:#8a94a6; --accent:#34d399; --danger:#f87171; --mono:'Courier New',monospace;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+    padding:24px 16px 80px;
+  }
+  .wrap{max-width:640px; margin:0 auto;}
+  header{display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:4px;}
+  h1{font-size:22px; margin:0;}
+  .badge{font-family:var(--mono); font-size:11px; color:var(--muted); border:1px solid var(--border); border-radius:6px; padding:4px 10px;}
+  .sub{color:var(--muted); font-size:13px; margin:6px 0 22px;}
+
+  .novo{
+    background:var(--card); border:1px solid var(--border); border-radius:14px;
+    padding:16px; margin-bottom:24px; display:flex; gap:10px; flex-wrap:wrap; align-items:center;
+  }
+  .novo input[type=date]{
+    background:#0d1118; border:1px solid var(--border); border-radius:8px; color:var(--text);
+    padding:9px 10px; font-family:var(--mono); font-size:13px;
+  }
+  .novo input[type=number]{
+    background:#0d1118; border:1px solid var(--border); border-radius:8px; color:var(--text);
+    padding:9px 10px; font-family:var(--mono); font-size:14px; width:140px;
+  }
+  .novo button{
+    background:var(--accent); color:#06231a; border:none; border-radius:8px;
+    padding:10px 16px; font-weight:600; font-size:13px; cursor:pointer;
+  }
+  .novo button:disabled{opacity:.4; cursor:default;}
+
+  .row{
+    background:var(--card); border:1px solid var(--border); border-radius:12px;
+    padding:12px 14px; margin-bottom:8px;
+    display:flex; justify-content:space-between; align-items:center; gap:12px;
+  }
+  .row .esquerda{display:flex; flex-direction:column; gap:2px;}
+  .row .data{font-weight:600; font-size:14.5px;}
+  .row .diasemana{font-size:11.5px; color:var(--muted); font-family:var(--mono);}
+  .row .direita{display:flex; align-items:center; gap:10px;}
+  .row input[type=number]{
+    background:#0d1118; border:1px solid var(--border); border-radius:8px; color:var(--accent);
+    padding:8px 10px; font-family:var(--mono); font-size:14px; width:120px; text-align:right;
+  }
+  .row button.save{
+    background:#1c2433; color:var(--text); border:1px solid var(--border); border-radius:8px;
+    padding:8px 12px; font-size:12.5px; cursor:pointer;
+  }
+  .row button.save:disabled{opacity:.35; cursor:default;}
+  .row.salvo{border-color:var(--accent);}
+  .row.salvo .data{color:var(--accent);}
+
+  .toast{
+    position:fixed; bottom:24px; left:50%; transform:translateX(-50%);
+    background:#1c2433; border:1px solid var(--border); color:var(--text);
+    padding:10px 18px; border-radius:10px; font-size:13px; opacity:0; transition:opacity .25s;
+    pointer-events:none;
+  }
+  .toast.show{opacity:1;}
+  .toast.err{border-color:var(--danger); color:var(--danger);}
+  footer{text-align:center; color:var(--muted); font-size:11.5px; margin-top:32px;}
+  footer a{color:var(--muted);}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Venda em Espécie</h1>
+    <span class="badge">Sir Fisher</span>
+  </header>
+  <p class="sub">Lance o valor da sangria em dinheiro espécie de cada dia (você confere no grupo do zap). Isso entra na venda total do dia e fica separado do caixa bancário até ser depositado.</p>
+
+  <div class="novo">
+    <input type="date" id="novaData">
+    <input type="number" id="novoValor" step="0.01" placeholder="R$ 0,00">
+    <button id="btnNovo">Lançar</button>
+  </div>
+
+  <div id="lista"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const SUPABASE_URL = "https://qqefegpievdlaprwzktx.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFxZWZlZ3BpZXZkbGFwcnd6a3R4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI0ODQxNzAsImV4cCI6MjA5ODA2MDE3MH0.1h_585aBtTnXtA0FLtbNvhkYpVokgfHbUpKcAIBImKY";
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const DIAS = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
+
+function toast(msg, isErr){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (isErr ? ' err' : '');
+  setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+function fmtDataLabel(isoDate){
+  const [y,m,d] = isoDate.split('-').map(Number);
+  const dt = new Date(y, m-1, d);
+  return { label: `${String(d).padStart(2,'0')}/${String(m).padStart(2,'0')}/${y}`, dow: DIAS[dt.getDay()] };
+}
+
+function hojeISO(){
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+
+async function carregar(){
+  document.getElementById('novaData').value = hojeISO();
+
+  // últimos 14 dias (de hoje pra trás), unidade PRAIA
+  const dias = [];
+  const base = new Date();
+  for (let i=0; i<14; i++){
+    const d = new Date(base);
+    d.setDate(d.getDate() - i);
+    dias.push(d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'));
+  }
+
+  const { data: lancados, error } = await sb
+    .from('venda_especie')
+    .select('*')
+    .eq('unidade', 'PRAIA')
+    .in('data', dias);
+
+  if (error){
+    toast('Erro ao carregar: ' + error.message, true);
+    return;
+  }
+
+  const porData = {};
+  (lancados || []).forEach(l => porData[l.data] = l);
+
+  const lista = document.getElementById('lista');
+  lista.innerHTML = '';
+  dias.forEach(d => lista.appendChild(linha(d, porData[d] || null)));
+}
+
+function linha(dataISO, registro){
+  const el = document.createElement('div');
+  el.className = 'row' + (registro ? ' salvo' : '');
+  const { label, dow } = fmtDataLabel(dataISO);
+
+  el.innerHTML = `
+    <div class="esquerda">
+      <div class="data">${label}</div>
+      <div class="diasemana">${dow}</div>
+    </div>
+    <div class="direita">
+      <input type="number" step="0.01" placeholder="0,00" value="${registro ? registro.valor : ''}">
+      <button class="save">${registro ? 'Atualizar' : 'Salvar'}</button>
+    </div>
+  `;
+
+  const input = el.querySelector('input');
+  const btn = el.querySelector('button.save');
+
+  btn.addEventListener('click', () => salvar(dataISO, input.value, el, btn));
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') salvar(dataISO, input.value, el, btn); });
+
+  return el;
+}
+
+async function salvar(dataISO, valorStr, el, btn){
+  const valor = parseFloat((valorStr || '').replace(',', '.'));
+  if (isNaN(valor) || valor < 0){
+    toast('Informe um valor válido.', true);
+    return;
+  }
+  btn.disabled = true;
+
+  const { error } = await sb.from('venda_especie').upsert({
+    data: dataISO,
+    unidade: 'PRAIA',
+    valor: valor
+  }, { onConflict: 'data,unidade' });
+
+  btn.disabled = false;
+  if (error){
+    toast('Não salvou: ' + error.message, true);
+    return;
+  }
+  el.classList.add('salvo');
+  btn.textContent = 'Atualizar';
+  toast('Lançado: R$ ' + valor.toFixed(2).replace('.', ','));
+}
+
+document.getElementById('btnNovo').addEventListener('click', async () => {
+  const data = document.getElementById('novaData').value;
+  const valorStr = document.getElementById('novoValor').value;
+  if (!data){ toast('Escolha uma data.', true); return; }
+  const valor = parseFloat((valorStr || '').replace(',', '.'));
+  if (isNaN(valor) || valor < 0){ toast('Informe um valor válido.', true); return; }
+
+  const btn = document.getElementById('btnNovo');
+  btn.disabled = true;
+  const { error } = await sb.from('venda_especie').upsert({
+    data, unidade: 'PRAIA', valor
+  }, { onConflict: 'data,unidade' });
+  btn.disabled = false;
+
+  if (error){ toast('Não salvou: ' + error.message, true); return; }
+  toast('Lançado: R$ ' + valor.toFixed(2).replace('.', ','));
+  document.getElementById('novoValor').value = '';
+  carregar();
+});
+
+carregar();
+</script>
+<footer>venda_especie · Supabase</footer>
+</body>
+</html>
