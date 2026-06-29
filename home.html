@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sir Fisher · Painel de Gestão</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#F7F5EF; --card:#FFFFFF; --header:#12313F; --text:#1F2933; --muted:#6B7280;
+    --border:#E5E7EB; --teal:#00A6A6; --amber:#D6A84F; --green:#2E7D5B; --red:#C94C4C;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{
+    background:var(--bg); color:var(--text);
+    font-family:'Roboto',Arial,sans-serif; font-size:14px; line-height:1.4;
+    -webkit-font-smoothing:antialiased;
+  }
+  .app{max-width:960px; margin:0 auto; padding-bottom:40px;}
+
+  /* CABEÇALHO */
+  header{
+    background:var(--header); color:#fff; padding:14px 18px 0;
+    position:sticky; top:0; z-index:10;
+  }
+  .head-row{display:flex; justify-content:space-between; align-items:center;}
+  .brand{display:flex; align-items:center; gap:9px;}
+  .brand .mark{
+    width:30px; height:30px; border-radius:7px; background:var(--teal);
+    display:flex; align-items:center; justify-content:center; flex-shrink:0;
+  }
+  .brand .mark svg{width:18px; height:18px;}
+  .brand h1{font-size:16px; font-weight:700; letter-spacing:.2px;}
+  .brand span{font-size:10.5px; color:#9fb3bd; display:block; font-weight:400;}
+  .head-meta{text-align:right;}
+  .head-meta .periodo{font-size:13px; font-weight:500;}
+  .head-meta .unidade{font-size:10.5px; color:#9fb3bd;}
+  .head-line{height:3px; background:var(--teal); margin-top:12px; border-radius:2px;}
+
+  main{padding:16px 14px 0;}
+  .section-title{
+    font-size:12px; font-weight:700; color:var(--muted); text-transform:uppercase;
+    letter-spacing:.6px; margin:22px 4px 10px;
+  }
+  .section-title:first-child{margin-top:6px;}
+
+  /* KPIs */
+  .kpis{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:11px;}
+  .kpi{
+    background:var(--card); border:1px solid var(--border); border-radius:11px;
+    padding:13px 14px; position:relative; overflow:hidden;
+  }
+  .kpi .bar{position:absolute; left:0; top:0; bottom:0; width:4px; background:var(--teal);}
+  .kpi .label{font-size:11px; color:var(--muted); font-weight:500; margin-bottom:7px; display:flex; align-items:center; gap:5px;}
+  .kpi .label svg{width:13px; height:13px; opacity:.75;}
+  .kpi .value{font-size:27px; font-weight:700; color:var(--text); line-height:1.1; letter-spacing:-.5px;}
+  .kpi .sub{font-size:11px; margin-top:5px; color:var(--muted);}
+  .kpi .sub b{font-weight:700;}
+  .up{color:var(--green);} .down{color:var(--red);}
+
+  /* CARDS DE GRÁFICO */
+  .card{
+    background:var(--card); border:1px solid var(--border); border-radius:12px;
+    padding:15px 15px 12px; margin-bottom:14px;
+  }
+  .card h3{font-size:14px; font-weight:700; margin-bottom:2px;}
+  .card .hint{font-size:11px; color:var(--muted); margin-bottom:12px;}
+  .chart-wrap{position:relative; width:100%;}
+  .h-gauge{height:180px;} .h-donut{height:230px;} .h-line{height:250px;}
+
+  /* gauge legenda central */
+  .gauge-center{position:absolute; top:62%; left:0; right:0; text-align:center; pointer-events:none;}
+  .gauge-center .pct{font-size:30px; font-weight:700; line-height:1;}
+  .gauge-center .cap{font-size:10.5px; color:var(--muted);}
+
+  .legend{display:flex; flex-wrap:wrap; gap:9px 14px; margin-top:12px;}
+  .legend .item{display:flex; align-items:center; gap:6px; font-size:11px; color:var(--text);}
+  .legend .dot{width:9px; height:9px; border-radius:2px; flex-shrink:0;}
+  .legend .val{color:var(--muted);}
+
+  .loading{padding:50px 0; text-align:center; color:var(--muted); font-size:13px;}
+  .erro{color:var(--red); font-size:12px; padding:12px; text-align:center;}
+
+  @media (max-width:430px){
+    .kpi .value{font-size:24px;}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="head-row">
+      <div class="brand">
+        <div class="mark">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M2 12s3-6 10-6 10 6 10 6-3 6-10 6S2 12 2 12z"/><circle cx="9" cy="12" r="1" fill="#fff"/>
+          </svg>
+        </div>
+        <div>
+          <h1>Sir Fisher</h1>
+          <span>Painel de Gestão</span>
+        </div>
+      </div>
+      <div class="head-meta">
+        <div class="periodo" id="periodo">—</div>
+        <div class="unidade">Unidade PRAIA</div>
+      </div>
+    </div>
+    <div class="head-line"></div>
+  </header>
+
+  <main id="main">
+    <div class="loading" id="loading">Carregando indicadores…</div>
+  </main>
+</div>
+
+<script>
+const SUPABASE_URL = "https://qqefegpievdlaprwzktx.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFxZWZlZ3BpZXZkbGFwcnd6a3R4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI0ODQxNzAsImV4cCI6MjA5ODA2MDE3MH0.1h_585aBtTnXtA0FLtbNvhkYpVokgfHbUpKcAIBImKY";
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const C = {header:'#12313F', teal:'#00A6A6', amber:'#D6A84F', green:'#2E7D5B',
+           red:'#C94C4C', muted:'#6B7280', border:'#E5E7EB', brown:'#B98A2E'};
+const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+
+function brl(v){
+  if(v==null||isNaN(v)) return '—';
+  const a=Math.abs(v);
+  if(a>=1e6) return 'R$ '+(v/1e6).toFixed(2).replace('.',',')+' mi';
+  if(a>=1e3) return 'R$ '+(v/1e3).toFixed(1).replace('.',',')+' mil';
+  return 'R$ '+v.toFixed(0);
+}
+function pct(v){ return (v==null||isNaN(v))?'—':v.toFixed(1).replace('.',',')+'%'; }
+function rs(v){ return v==null?'—':'R$ '+v.toFixed(2).replace('.',','); }
+
+function ic(path){ return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+path+'</svg>'; }
+const ICON={
+  cash:'<path d="M2 7h20v10H2z"/><circle cx="12" cy="12" r="2.5"/>',
+  result:'<path d="M3 3v18h18"/><path d="M7 14l3-3 3 3 4-5"/>',
+  wallet:'<path d="M3 6h16v12H3z"/><path d="M16 12h3"/>',
+  ticket:'<path d="M3 8h18v8H3z"/><path d="M9 8v8"/>',
+  box:'<path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 7v10l9 4 9-4V7"/>',
+  people:'<circle cx="9" cy="8" r="3"/><path d="M3 20c0-3 3-5 6-5s6 2 6 5"/><path d="M16 6a3 3 0 010 6"/>'
+};
+
+async function main(){
+  try{
+    const [resumo, caixa, comp] = await Promise.all([
+      sb.from('painel_resumo_mensal').select('*').order('mes',{ascending:true}),
+      sb.from('fluxo_caixa_diario').select('dia,saldo,tipo').eq('tipo','real').order('dia',{ascending:false}).limit(1),
+      sb.from('painel_composicao_despesa').select('*')
+    ]);
+    if(resumo.error) throw resumo.error;
+
+    const rows = resumo.data || [];
+    // mes atual = ultimo mes com faturamento real > 0
+    const reais = rows.filter(r=>Number(r.faturamento)>0);
+    const cur = reais[reais.length-1];
+    if(!cur) throw new Error('Sem dados de faturamento.');
+    const idx = rows.findIndex(r=>r.ano_mes===cur.ano_mes);
+    const prev = idx>0 ? rows[idx-1] : null;
+
+    const saldo = (caixa.data&&caixa.data[0])?Number(caixa.data[0].saldo):null;
+    const compCur = (comp.data||[]).filter(r=>r.ano_mes===cur.ano_mes);
+
+    render(cur, prev, saldo, compCur, rows);
+  }catch(e){
+    document.getElementById('main').innerHTML =
+      '<div class="erro">Não foi possível carregar os dados: '+(e.message||e)+'</div>';
+  }
+}
+
+function variacao(cur, prev){
+  if(!prev||!Number(prev.faturamento)) return '';
+  const c=Number(cur.faturamento_proj||cur.faturamento), p=Number(prev.faturamento);
+  const d=(c-p)/p*100;
+  const cls=d>=0?'up':'down', sig=d>=0?'+':'';
+  return '<div class="sub '+cls+'"><b>'+sig+d.toFixed(1).replace('.',',')+'%</b> vs mês anterior</div>';
+}
+
+function kpi(label, iconKey, value, sub, color){
+  return '<div class="kpi"><span class="bar" style="background:'+(color||C.teal)+'"></span>'+
+    '<div class="label">'+ic(ICON[iconKey])+label+'</div>'+
+    '<div class="value">'+value+'</div>'+(sub||'')+'</div>';
+}
+
+function render(cur, prev, saldo, comp, rows){
+  const m = new Date(cur.mes); // mes atual
+  const mesNome = MESES[m.getUTCMonth()]+' '+m.getUTCFullYear();
+  document.getElementById('periodo').textContent = mesNome;
+
+  const margem = Number(cur.margem_perc);
+  const margCls = margem>=0?'up':'down';
+  const resCor = Number(cur.resultado)>=0?C.green:C.red;
+
+  const html = `
+    <div class="section-title">Resumo do mês</div>
+    <div class="kpis">
+      ${kpi('Faturamento (tendência)','cash', brl(Number(cur.faturamento_proj)),
+            variacao(cur,prev), C.header)}
+      ${kpi('Resultado','result', brl(Number(cur.resultado)),
+            '<div class="sub '+margCls+'">margem <b>'+pct(margem)+'</b></div>', resCor)}
+      ${kpi('Saldo em caixa','wallet', brl(saldo), '<div class="sub">hoje</div>', C.teal)}
+      ${kpi('Ticket médio','ticket', rs(cur.ticket_medio==null?null:Number(cur.ticket_medio)),
+            '<div class="sub">'+(cur.qtd_vendas||0)+' vendas</div>', C.amber)}
+      ${kpi('CMV','box', pct(Number(cur.cmv_perc)),
+            '<div class="sub">'+brl(Number(cur.cmv))+'</div>', C.amber)}
+      ${kpi('Custo de pessoal','people', pct(Number(cur.pessoal_perc)),
+            '<div class="sub">'+brl(Number(cur.pessoal))+'</div>',
+            Number(cur.pessoal_perc)>30?C.red:C.teal)}
+    </div>
+
+    <div class="section-title">Meta do mês</div>
+    <div class="card">
+      <h3>Atingimento da meta</h3>
+      <div class="hint">Tendência de fechamento sobre a meta de ${brl(Number(cur.meta))}</div>
+      <div class="chart-wrap h-gauge">
+        <canvas id="gauge"></canvas>
+        <div class="gauge-center">
+          <div class="pct" id="gaugePct" style="color:${margem>=0&&Number(cur.perc_meta)>=100?C.green:C.header}">${pct(Number(cur.perc_meta))}</div>
+          <div class="cap">da meta</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-title">Para onde vai o dinheiro</div>
+    <div class="card">
+      <h3>Composição de despesas</h3>
+      <div class="hint">Distribuição por grupo no mês atual</div>
+      <div class="chart-wrap h-donut"><canvas id="donut"></canvas></div>
+      <div class="legend" id="donutLeg"></div>
+    </div>
+
+    <div class="section-title">Evolução</div>
+    <div class="card">
+      <h3>Receita e margem</h3>
+      <div class="hint">Últimos meses — barra: receita · linha: margem %</div>
+      <div class="chart-wrap h-line"><canvas id="evo"></canvas></div>
+    </div>
+  `;
+  document.getElementById('main').innerHTML = html;
+
+  drawGauge(Number(cur.perc_meta), margem);
+  drawDonut(comp);
+  drawEvo(rows);
+}
+
+Chart.defaults.font.family = "'Roboto',Arial,sans-serif";
+Chart.defaults.color = C.muted;
+
+function drawGauge(perc, margem){
+  const v = Math.max(0, Math.min(perc||0, 100));
+  const cor = (perc>=100) ? C.green : (perc>=85 ? C.teal : C.amber);
+  new Chart(document.getElementById('gauge'),{
+    type:'doughnut',
+    data:{datasets:[{data:[v,100-v], backgroundColor:[cor,'#EFece3'],
+      borderWidth:0, circumference:180, rotation:270}]},
+    options:{responsive:true, maintainAspectRatio:false, cutout:'72%',
+      plugins:{legend:{display:false}, tooltip:{enabled:false}}}
+  });
+}
+
+function drawDonut(comp){
+  if(!comp.length){ document.getElementById('donutLeg').innerHTML='<span class="val">Sem despesas no mês.</span>'; return; }
+  const sorted=[...comp].sort((a,b)=>Number(b.valor)-Number(a.valor));
+  const top=sorted.slice(0,5);
+  const resto=sorted.slice(5).reduce((s,r)=>s+Number(r.valor),0);
+  const labels=top.map(r=>r.grupo); const vals=top.map(r=>Number(r.valor));
+  if(resto>0){ labels.push('Outros'); vals.push(resto); }
+  const cores=[C.header,C.teal,C.amber,C.brown,C.muted,'#9aa6b2'];
+  const total=vals.reduce((a,b)=>a+b,0);
+
+  new Chart(document.getElementById('donut'),{
+    type:'doughnut',
+    data:{labels, datasets:[{data:vals, backgroundColor:cores, borderWidth:2, borderColor:'#fff'}]},
+    options:{responsive:true, maintainAspectRatio:false, cutout:'62%',
+      plugins:{legend:{display:false},
+        tooltip:{callbacks:{label:(c)=>' '+brl(c.parsed)+' ('+(c.parsed/total*100).toFixed(0)+'%)'}}}}
+  });
+  document.getElementById('donutLeg').innerHTML = labels.map((l,i)=>
+    '<div class="item"><span class="dot" style="background:'+cores[i]+'"></span>'+
+    l+' <span class="val">'+brl(vals[i])+'</span></div>').join('');
+}
+
+function drawEvo(rows){
+  const data=rows.filter(r=>Number(r.receita)>0).slice(-12);
+  const labels=data.map(r=>{const d=new Date(r.mes); return MESES[d.getUTCMonth()].slice(0,3)+'/'+String(d.getUTCFullYear()).slice(2);});
+  const receita=data.map(r=>Number(r.receita));
+  const margem=data.map(r=>r.margem_perc==null?null:Number(r.margem_perc));
+
+  new Chart(document.getElementById('evo'),{
+    data:{labels, datasets:[
+      {type:'bar', label:'Receita', data:receita, backgroundColor:C.header, borderRadius:4, yAxisID:'y', order:2},
+      {type:'line', label:'Margem %', data:margem, borderColor:C.teal, backgroundColor:C.teal,
+       borderWidth:2, tension:.3, pointRadius:3, pointBackgroundColor:C.teal, yAxisID:'y1', order:1}
+    ]},
+    options:{responsive:true, maintainAspectRatio:false,
+      interaction:{mode:'index', intersect:false},
+      plugins:{legend:{display:true, labels:{boxWidth:10, font:{size:11}, usePointStyle:true}},
+        tooltip:{callbacks:{label:(c)=>c.dataset.type==='line'?' Margem '+pct(c.parsed.y):' '+brl(c.parsed.y)}}},
+      scales:{
+        y:{position:'left', grid:{color:C.border}, ticks:{callback:v=>brl(v), font:{size:10}}},
+        y1:{position:'right', grid:{display:false}, ticks:{callback:v=>v+'%', font:{size:10}}},
+        x:{grid:{display:false}, ticks:{font:{size:10}}}
+      }}
+  });
+}
+
+main();
+</script>
+</body>
+</html>
