@@ -85,7 +85,7 @@ const SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYm
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
 const C={header:'#12313F',teal:'#00A6A6',amber:'#D6A84F',green:'#2E7D5B',red:'#C94C4C',muted:'#6B7280',border:'#E5E7EB',brown:'#B98A2E',grey:'#9aa6b2'};
 const MESES=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-let ROWS=[],COMP=[],DIA=[],SALDO={},CHARTS=[];
+let ROWS=[],COMP=[],SALDO={},CHARTS=[];
 
 const DESC={
   fat:'Projeção de quanto o mês vai fechar, com base no ritmo de vendas até agora.',
@@ -118,15 +118,14 @@ function kpi(label,iconKey,value,sub,color,descKey){
 
 async function main(){
   try{
-    const[r,sfm,comp,dia]=await Promise.all([
+    const[r,sfm,comp]=await Promise.all([
       sb.from('painel_resumo_mensal').select('*').order('mes',{ascending:true}),
-      sb.from('painel_saldo_fim_mes').select('ano_mes,saldo_fim,situacao'),
-      sb.from('painel_composicao_despesa').select('*'),
-      sb.from('painel_diario').select('dia,mes,venda_dia,meta_dia')
+      sb.from('painel_saldo_fim_mes').select('*'),
+      sb.from('painel_composicao_despesa').select('*')
     ]);
     if(r.error)throw r.error;
-    ROWS=r.data||[];COMP=comp.data||[];DIA=dia.data||[];
-    (sfm.data||[]).forEach(x=>SALDO[x.ano_mes]={v:Number(x.saldo_fim),s:x.situacao});
+    ROWS=r.data||[];COMP=comp.data||[];
+    (sfm.data||[]).forEach(x=>SALDO[x.ano_mes]={v:Number(x.saldo_fim),s:(x.situacao||(x.tem_projecao?'Projetado':'Real'))});
 
     const opts=ROWS.filter(x=>Number(x.faturamento)>0);
     if(!opts.length)throw new Error('Sem dados de faturamento.');
@@ -155,8 +154,8 @@ function renderMes(anoMes){
   const html=`
     <div class="section-title">Resumo do mês</div>
     <div class="kpis">
-      ${kpi('Faturamento (tend)','cash',brl(fat),deltaPct(fat,fatPrev,false),C.header,'fat')}
-      ${kpi('Lucro liquido','result',brl(N(cur.resultado)),deltaVal(N(cur.resultado),prev?N(prev.resultado):null),resCor,'res')}
+      ${kpi('Faturamento (tendência)','cash',brl(fat),deltaPct(fat,fatPrev,false),C.header,'fat')}
+      ${kpi('Resultado operacional','result',brl(N(cur.resultado)),deltaVal(N(cur.resultado),prev?N(prev.resultado):null),resCor,'res')}
       ${kpi('Lucro bruto','margin',brl(lb),deltaPct(lb,lbPrev,false),C.green,'lb')}
       ${kpi('Margem bruta','margin',pct(mb),deltaPP(mb,mbPrev,false),C.header,'mb')}
       ${kpi('Ticket médio','ticket',rs(cur.ticket_medio),'<div class="sub">'+(cur.qtd_vendas||0)+' vendas</div>',C.amber,'tk')}
@@ -216,8 +215,10 @@ function drawBullet(fat,meta,perc){
 Chart.defaults.font.family="'Roboto',Arial,sans-serif";Chart.defaults.color=C.muted;
 const valEnd={id:'valEnd',afterDatasetsDraw(ch){const{ctx}=ch;const ds=ch.getDatasetMeta(0);ctx.save();ctx.font='600 11px Roboto,Arial';ctx.fillStyle=C.muted;ctx.textBaseline='middle';ds.data.forEach((b,i)=>{ctx.fillText(brl(ch.data.datasets[0].data[i]),b.x+6,b.y);});ctx.restore();}};
 
-function drawDia(anoMes){
-  const d=DIA.filter(r=>String(r.mes).startsWith(anoMes)).sort((a,b)=>a.dia<b.dia?-1:1);
+async function drawDia(anoMes){
+  const {data,error}=await sb.from('painel_diario').select('dia,venda_dia,meta_dia').eq('mes',anoMes+'-01').order('dia',{ascending:true});
+  if(error){document.getElementById('dia').parentElement.innerHTML='<div class="hint">Não foi possível carregar as vendas do dia.</div>';return;}
+  const d=data||[];
   const labels=d.map(r=>r.dia.split('-')[2]);
   const venda=d.map(r=>r.venda_dia==null?null:Number(r.venda_dia));
   const meta=d.map(r=>r.meta_dia==null?null:Number(r.meta_dia));
