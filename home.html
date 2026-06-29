@@ -118,14 +118,12 @@ function kpi(label,iconKey,value,sub,color,descKey){
 
 async function main(){
   try{
-    const[r,sfm,comp]=await Promise.all([
+    const[r,comp]=await Promise.all([
       sb.from('painel_resumo_mensal').select('*').order('mes',{ascending:true}),
-      sb.from('painel_saldo_fim_mes').select('*'),
       sb.from('painel_composicao_despesa').select('*')
     ]);
     if(r.error)throw r.error;
     ROWS=r.data||[];COMP=comp.data||[];
-    (sfm.data||[]).forEach(x=>SALDO[x.ano_mes]={v:Number(x.saldo_fim),s:(x.situacao||(x.tem_projecao?'Projetado':'Real'))});
 
     const opts=ROWS.filter(x=>Number(x.faturamento)>0);
     if(!opts.length)throw new Error('Sem dados de faturamento.');
@@ -149,13 +147,13 @@ function renderMes(anoMes){
   const mb=N(cur.receita)>0?(lb/N(cur.receita)*100):null;
   const mbPrev=prev&&N(prev.receita)>0?((N(prev.receita)-N(prev.cmv))/N(prev.receita)*100):null;
   const resCor=N(cur.resultado)>=0?C.green:C.red;
-  const sal=SALDO[anoMes];
+  const sal=cur.saldo_fim!=null?{v:Number(cur.saldo_fim),s:cur.saldo_situacao}:null;
 
   const html=`
     <div class="section-title">Resumo do mês</div>
     <div class="kpis">
-      ${kpi('Faturamento (tendência)','cash',brl(fat),deltaPct(fat,fatPrev,false),C.header,'fat')}
-      ${kpi('Resultado operacional','result',brl(N(cur.resultado)),deltaVal(N(cur.resultado),prev?N(prev.resultado):null),resCor,'res')}
+      ${kpi('Faturamento (tend.)','cash',brl(fat),deltaPct(fat,fatPrev,false),C.header,'fat')}
+      ${kpi('Lucro líquido','result',brl(N(cur.resultado)),deltaVal(N(cur.resultado),prev?N(prev.resultado):null),resCor,'res')}
       ${kpi('Lucro bruto','margin',brl(lb),deltaPct(lb,lbPrev,false),C.green,'lb')}
       ${kpi('Margem bruta','margin',pct(mb),deltaPP(mb,mbPrev,false),C.header,'mb')}
       ${kpi('Ticket médio','ticket',rs(cur.ticket_medio),'<div class="sub">'+(cur.qtd_vendas||0)+' vendas</div>',C.amber,'tk')}
@@ -215,6 +213,19 @@ function drawBullet(fat,meta,perc){
 Chart.defaults.font.family="'Roboto',Arial,sans-serif";Chart.defaults.color=C.muted;
 const valEnd={id:'valEnd',afterDatasetsDraw(ch){const{ctx}=ch;const ds=ch.getDatasetMeta(0);ctx.save();ctx.font='600 11px Roboto,Arial';ctx.fillStyle=C.muted;ctx.textBaseline='middle';ds.data.forEach((b,i)=>{ctx.fillText(brl(ch.data.datasets[0].data[i]),b.x+6,b.y);});ctx.restore();}};
 
+// abrevia 8633 -> "8,6K"; <1000 mostra o numero cheio
+function abrevK(v){if(v==null||v===0)return '';if(v>=1000)return (v/1000).toFixed(1).replace('.',',')+'K';return String(Math.round(v));}
+// rotulo vertical na base interna das barras de "Vendido" (dataset 0)
+const barLabelBase={id:'barLabelBase',afterDatasetsDraw(ch){
+  const ds=ch.getDatasetMeta(0);const data=ch.data.datasets[0].data;const ya=ch.scales.y;
+  const ctx=ch.ctx;ctx.save();ctx.font='600 9px Roboto,Arial';ctx.fillStyle='#fff';ctx.textAlign='center';ctx.textBaseline='middle';
+  ds.data.forEach((b,i)=>{const v=data[i];if(v==null||v===0)return;const t=abrevK(v);
+    const baseY=ya.getPixelForValue(0);const alturaBarra=baseY-b.y;
+    if(alturaBarra<24)return; // sem espaco, nao desenha
+    ctx.save();ctx.translate(b.x,baseY-12);ctx.rotate(-Math.PI/2);ctx.fillText(t,0,0);ctx.restore();
+  });ctx.restore();
+}};
+
 async function drawDia(anoMes){
   const {data,error}=await sb.from('painel_diario').select('dia,venda_dia,meta_dia').eq('mes',anoMes+'-01').order('dia',{ascending:true});
   if(error){document.getElementById('dia').parentElement.innerHTML='<div class="hint">Não foi possível carregar as vendas do dia.</div>';return;}
@@ -229,7 +240,8 @@ async function drawDia(anoMes){
     ]},
     options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
       plugins:{legend:{display:true,labels:{boxWidth:10,font:{size:11},usePointStyle:true}},tooltip:{callbacks:{label:c=>' '+(c.dataset.label)+': '+brl(c.parsed.y)}}},
-      scales:{y:{grid:{color:C.border},ticks:{callback:v=>brl(v),font:{size:10}}},x:{grid:{display:false},ticks:{font:{size:9},maxRotation:0,autoSkip:true,maxTicksLimit:16}}}}}));
+      scales:{y:{grid:{color:C.border},ticks:{callback:v=>brl(v),font:{size:10}}},x:{grid:{display:false},ticks:{font:{size:9},maxRotation:0,autoSkip:false}}}},
+    plugins:[barLabelBase]}));
 }
 
 function drawBars(anoMes){
