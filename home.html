@@ -116,6 +116,22 @@ function kpi(label,iconKey,value,sub,color,descKey){
     '<div class="value" style="color:'+(color&&color!==C.teal?color:C.text)+'">'+value+'</div>'+(sub||'')+'</div>';
 }
 
+async function loadSaldoMes(anoMes){
+  // Saldo separado do resumo para não derrubar a home se o cálculo do caixa demorar.
+  if(SALDO[anoMes])return;
+  try{
+    const {data,error}=await sb.from('saldo_mensal')
+      .select('ano_mes,saldo_fim,situacao')
+      .eq('ano_mes',anoMes)
+      .limit(1);
+    if(error)throw error;
+    const r=(data||[])[0];
+    SALDO[anoMes]=r?{v:Number(r.saldo_fim),s:r.situacao}:{v:null,s:null};
+    const sel=document.getElementById('mesSel');
+    if(sel&&sel.value===anoMes)renderMes(anoMes);
+  }catch(e){console.warn('Saldo não carregado:',e.message||e);}
+}
+
 async function main(){
   try{
     const[r,comp]=await Promise.all([
@@ -147,7 +163,8 @@ function renderMes(anoMes){
   const mb=N(cur.receita)>0?(lb/N(cur.receita)*100):null;
   const mbPrev=prev&&N(prev.receita)>0?((N(prev.receita)-N(prev.cmv))/N(prev.receita)*100):null;
   const resCor=N(cur.resultado)>=0?C.green:C.red;
-  const sal=cur.saldo_fim!=null?{v:Number(cur.saldo_fim),s:cur.saldo_situacao}:null;
+  const sal=SALDO[anoMes]||null;
+  if(!sal)loadSaldoMes(anoMes);
 
   const html=`
     <div class="section-title">Resumo do mês</div>
