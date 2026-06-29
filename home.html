@@ -117,19 +117,26 @@ function kpi(label,iconKey,value,sub,color,descKey){
 }
 
 async function loadSaldoMes(anoMes){
-  // Saldo separado do resumo para não derrubar a home se o cálculo do caixa demorar.
-  if(SALDO[anoMes])return;
+  // Usa painel_saldo_fim_mes porque esse endpoint já existia no PostgREST.
+  // Evita falha de schema cache quando a view nova saldo_mensal ainda não aparece na API.
+  if(SALDO[anoMes] && !SALDO[anoMes].erro)return;
+  SALDO[anoMes]={loading:true};
   try{
-    const {data,error}=await sb.from('saldo_mensal')
-      .select('ano_mes,saldo_fim,situacao')
-      .eq('ano_mes',anoMes)
+    const {data,error}=await sb.from('painel_saldo_fim_mes')
+      .select('mes,ano_mes,saldo_fim,situacao')
+      .eq('mes',anoMes+'-01')
       .limit(1);
     if(error)throw error;
     const r=(data||[])[0];
-    SALDO[anoMes]=r?{v:Number(r.saldo_fim),s:r.situacao}:{v:null,s:null};
+    SALDO[anoMes]=r?{v:Number(r.saldo_fim),s:r.situacao}:{v:null,s:null,erro:true};
     const sel=document.getElementById('mesSel');
     if(sel&&sel.value===anoMes)renderMes(anoMes);
-  }catch(e){console.warn('Saldo não carregado:',e.message||e);}
+  }catch(e){
+    console.warn('Saldo não carregado:',e.message||e);
+    SALDO[anoMes]={v:null,s:null,erro:true};
+    const sel=document.getElementById('mesSel');
+    if(sel&&sel.value===anoMes)renderMes(anoMes);
+  }
 }
 
 async function main(){
@@ -177,7 +184,7 @@ function renderMes(anoMes){
       ${kpi('Nº de vendas','orders',(cur.qtd_vendas||0).toLocaleString('pt-BR'),deltaPct(N(cur.qtd_vendas),prev?N(prev.qtd_vendas):null,false),C.teal,'nv')}
       ${kpi('CMV','box',pct(N(cur.cmv_perc)),deltaPP(N(cur.cmv_perc),prev?N(prev.cmv_perc):null,true),N(cur.cmv_perc)>38?C.red:C.amber,'cmv')}
       ${kpi('Custo de pessoal','people',pct(N(cur.pessoal_perc)),deltaPP(N(cur.pessoal_perc),prev?N(prev.pessoal_perc):null,true),N(cur.pessoal_perc)>30?C.red:C.teal,'pes')}
-      ${kpi('Saldo em caixa','wallet',brl(sal?sal.v:null),'<div class="sub">'+(sal&&sal.s==='Projetado'?'projeção fim do mês':'fim do mês')+'</div>',C.teal,'sal')}
+      ${kpi('Saldo em caixa','wallet',brl(sal&&!sal.loading&&!sal.erro?sal.v:null),'<div class="sub '+(sal&&sal.erro?'down':'')+'">'+(!sal||sal.loading?'carregando saldo...':(sal.erro?'saldo não carregado':(sal.s==='Projetado'?'projeção fim do mês':'fim do mês')))+'</div>',C.teal,'sal')}
     </div>
 
     <div class="section-title">Meta do mês</div>
