@@ -49,15 +49,13 @@
   .meta-pct{font-size:34px;font-weight:700;line-height:1;}
   .meta-diff{font-size:12px;font-weight:500;}
   .bullet{margin-top:6px;}
-  .bullet-track{position:relative;height:22px;background:#EFece3;border-radius:6px;overflow:visible;}
+  .bullet-track{position:relative;height:22px;background:#EFece3;border-radius:6px;overflow:visible;margin-bottom:22px;}
   .bullet-fill{position:absolute;left:0;top:0;bottom:0;border-radius:6px;}
   .bullet-mark{position:absolute;top:-4px;bottom:-4px;width:3px;border-radius:2px;}
   .bullet-mark.proj{background:var(--teal);}
   .bullet-mark.meta{background:var(--amber);}
-  .bullet-mark::after{position:absolute;top:-15px;left:50%;transform:translateX(-50%);font-size:9px;font-weight:700;white-space:nowrap;}
-  .bullet-mark.proj::after{content:'Proj.';color:var(--teal);}
-  .bullet-mark.meta::after{content:'Meta';color:var(--amber);}
-  .bullet-leg{display:flex;flex-wrap:wrap;gap:10px;margin-top:11px;font-size:10.5px;color:var(--muted);}
+  .bm-val{position:absolute;top:calc(100% + 3px);left:50%;font-size:9.5px;font-weight:700;white-space:nowrap;}
+  .bullet-leg{display:flex;flex-wrap:wrap;gap:10px;margin-top:2px;font-size:10.5px;color:var(--muted);}
   .bullet-leg span{display:flex;align-items:center;gap:5px;}
   .bullet-leg i{width:10px;height:10px;border-radius:3px;display:inline-block;}
   .bullet-leg i.tick{width:3px;height:12px;border-radius:1px;}
@@ -191,7 +189,6 @@ function renderMes(anoMes){
   const salPprev=prev?SALDO[prev.ano_mes]:null;
   // saldo em caixa real (foto do ultimo dia) - mesmo valor em qualquer mes
   const sr=SALDO_REAL;
-  const dataRef=sr&&sr.data_ref?sr.data_ref.split('-').reverse().slice(0,2).join('/'):'';
   const mc=MC[anoMes], mcPrev=prev?MC[prev.ano_mes]:null;
 
   const html=`
@@ -200,8 +197,8 @@ function renderMes(anoMes){
       ${kpi('Faturamento (tend.)','cash',brl0(N(cur.faturamento_proj)),deltaVal(N(cur.faturamento_proj),prev?N(prev.faturamento):null),C.header,'fat')}
       ${kpi('Lucro bruto','margin',brl0(N(cur.receita)-N(cur.cmv)),deltaPct(N(cur.receita)-N(cur.cmv),prev?(N(prev.receita)-N(prev.cmv)):null,false),C.green,'lb')}
       ${kpi('Lucro líquido','result',brl(N(cur.resultado)),deltaVal(N(cur.resultado),prev?N(prev.resultado):null),resCor,'res')}
-      ${kpi('Saldo em caixa','wallet',brl(sr?Number(sr.saldo_atual):null),(sr?('<div class="sub">saldo de '+dataRef+'</div>'+deltaVal(Number(sr.saldo_atual),sr.saldo_comp!=null?Number(sr.saldo_comp):null)):'<div class="sub">—</div>'),C.teal,'sal')}
-      ${kpi('Saldo projetado','wallet',brl(salP?salP.v:null),(salP?('<div class="sub">'+(salP.s==='Projetado'?'projeção fim do mês':'fim do mês')+'</div>'+deltaPct(salP.v,salPprev?salPprev.v:null,false)):'<div class="sub">—</div>'),C.amber,'salp')}
+      ${kpi('Saldo em caixa','wallet',brl(sr?Number(sr.saldo_atual):null),(sr?deltaVal(Number(sr.saldo_atual),sr.saldo_comp!=null?Number(sr.saldo_comp):null):'<div class="sub">—</div>'),C.teal,'sal')}
+      ${kpi('Saldo projetado','wallet',brl(salP?salP.v:null),(salP?deltaPct(salP.v,salPprev?salPprev.v:null,false):'<div class="sub">—</div>'),C.amber,'salp')}
       ${kpi('Nº de vendas','orders',(cur.qtd_vendas||0).toLocaleString('pt-BR'),deltaPct(N(cur.qtd_vendas),prev?N(prev.qtd_vendas):null,false),C.teal,'nv')}
       ${kpi('Ticket médio','ticket',rs(cur.ticket_medio),deltaPct(N(cur.ticket_medio),prev?N(prev.ticket_medio):null,false),C.amber,'tk')}
       ${kpi('Margem contrib.','margin',pct(mc),deltaPP(mc,mcPrev,false),C.header,'mc')}
@@ -238,11 +235,11 @@ function renderMes(anoMes){
 
 function drawBullet(realizado,proj,meta,perc){
   realizado=realizado||0;proj=proj||0;meta=meta||0;
-  const scale=Math.max(proj,meta,realizado)*1.06||1;
-  const fillW=Math.min(realizado/scale*100,100);
-  const projPos=Math.min(proj/scale*100,100);
-  const metaPos=Math.min(meta/scale*100,100);
-  const acima=proj>=meta; // projeção vs meta (manchete)
+  const teto=Math.max(proj,meta)||1;          // o maior marcador define a ponta
+  const fillW=Math.min(realizado/teto*100,100);
+  const projPos=Math.min(proj/teto*100,100);
+  const metaPos=Math.min(meta/teto*100,100);
+  const acima=proj>=meta;
   const diff=proj-meta;
   const diffTxt=acima?('▲ '+brl(Math.abs(diff))+' acima da meta'):('▼ '+brl(Math.abs(diff))+' abaixo da meta');
   document.getElementById('bullet').innerHTML=`
@@ -253,16 +250,18 @@ function drawBullet(realizado,proj,meta,perc){
     <div class="bullet">
       <div class="bullet-track">
         <div class="bullet-fill" style="width:${fillW}%;background:${C.green}"></div>
-        <div class="bullet-mark proj" style="left:${projPos}%"></div>
-        <div class="bullet-mark meta" style="left:${metaPos}%"></div>
+        <div class="bullet-mark proj" style="left:${projPos}%"><span class="bm-val" style="color:${C.teal};transform:${al(projPos)}">${abrevK(proj)}</span></div>
+        <div class="bullet-mark meta" style="left:${metaPos}%"><span class="bm-val" style="color:${C.amber};transform:${al(metaPos)}">${abrevK(meta)}</span></div>
       </div>
       <div class="bullet-leg">
-        <span><i style="background:${C.green}"></i> Realizado ${brl(realizado)}</span>
-        <span><i class="tick" style="background:${C.teal}"></i> Projeção ${brl(proj)}</span>
-        <span><i class="tick" style="background:${C.amber}"></i> Meta ${brl(meta)}</span>
+        <span><i style="background:${C.green}"></i> Realizado ${abrevK(realizado)}</span>
+        <span><i class="tick" style="background:${C.teal}"></i> Projeção</span>
+        <span><i class="tick" style="background:${C.amber}"></i> Meta</span>
       </div>
     </div>`;
 }
+// alinhamento do rotulo conforme posicao (evita estourar nas bordas)
+function al(pos){return pos>82?'translateX(-100%)':(pos<18?'translateX(0)':'translateX(-50%)');}
 
 Chart.defaults.font.family="'Roboto',Arial,sans-serif";Chart.defaults.color=C.muted;
 const valEnd={id:'valEnd',afterDatasetsDraw(ch){const{ctx}=ch;const ds=ch.getDatasetMeta(0);ctx.save();ctx.font='600 11px Roboto,Arial';ctx.fillStyle=C.muted;ctx.textBaseline='middle';ds.data.forEach((b,i)=>{ctx.fillText(brl(ch.data.datasets[0].data[i]),b.x+6,b.y);});ctx.restore();}};
