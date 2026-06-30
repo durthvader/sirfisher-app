@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sir Fisher · Caixa</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root{--bg:#F7F5EF;--card:#FFFFFF;--header:#12313F;--text:#1F2933;--muted:#6B7280;--border:#E5E7EB;--teal:#00A6A6;--amber:#D6A84F;--green:#2E7D5B;--red:#C94C4C;}
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);color:var(--text);font-family:'Roboto',Arial,sans-serif;font-size:14px;line-height:1.4;-webkit-font-smoothing:antialiased;}
+  .app{max-width:960px;margin:0 auto;padding-bottom:30px;}
+  header{background:var(--header);color:#fff;position:sticky;top:0;z-index:10;}
+  .head-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:14px 18px 12px;}
+  .brand{display:flex;align-items:center;gap:9px;min-width:0;}
+  .brand .mark{width:30px;height:30px;border-radius:7px;background:var(--teal);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .brand .mark svg{width:18px;height:18px;}
+  .brand h1{font-size:16px;font-weight:700;letter-spacing:.2px;}
+  .brand span{font-size:10.5px;color:#9fb3bd;display:block;font-weight:400;}
+  .head-meta{text-align:right;flex-shrink:0;}
+  .head-meta select{background:#1b3d4d;color:#fff;border:1px solid #2c5468;border-radius:8px;padding:6px 10px;font-family:inherit;font-size:13px;font-weight:500;cursor:pointer;}
+  .head-meta .unidade{font-size:10.5px;color:#9fb3bd;margin-top:3px;}
+  .tabs{display:flex;gap:1px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;border-top:1px solid #21465a;}
+  .tabs::-webkit-scrollbar{display:none;}
+  .tabs a,.tabs span{flex-shrink:0;padding:9px 13px 10px;font-size:12.5px;font-weight:500;color:#9fb3bd;text-decoration:none;border-bottom:2.5px solid transparent;white-space:nowrap;}
+  .tabs a:hover{color:#dce8ec;}
+  .tabs a.active{color:#fff;border-bottom-color:var(--teal);font-weight:700;}
+  .tabs span.soon{color:#52707d;cursor:default;}
+  main{padding:16px 14px 0;}
+  .section-title{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin:22px 4px 10px;}
+  .section-title:first-child{margin-top:6px;}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:11px;}
+  .kpi{background:var(--card);border:1px solid var(--border);border-radius:11px;padding:13px 14px;position:relative;overflow:hidden;}
+  .kpi .bar{position:absolute;left:0;top:0;bottom:0;width:4px;}
+  .kpi .label{font-size:11px;color:var(--muted);font-weight:500;margin-bottom:7px;display:flex;align-items:center;gap:5px;}
+  .kpi .label svg{width:13px;height:13px;opacity:.75;flex-shrink:0;}
+  .kpi .label .txt{flex:1;}
+  .kpi-info{width:15px;height:15px;border-radius:50%;border:1px solid var(--border);color:var(--muted);font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;}
+  .kpi-info:hover{background:var(--bg);}
+  .kpi .value{font-size:24px;font-weight:700;line-height:1.1;letter-spacing:-.5px;}
+  .kpi .sub{font-size:10.8px;margin-top:5px;color:var(--muted);}
+  .kpi .sub b{font-weight:700;}
+  .up{color:var(--green);}.down{color:var(--red);}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:15px 15px 13px;margin-bottom:14px;}
+  .card h3{font-size:14px;font-weight:700;margin-bottom:2px;}
+  .card .hint{font-size:11px;color:var(--muted);margin-bottom:12px;}
+  .chart-wrap{position:relative;width:100%;}
+  .h-curve{height:280px;}.h-flow{height:200px;}
+  .legenda{display:flex;gap:16px;flex-wrap:wrap;font-size:11px;color:var(--muted);margin-top:8px;}
+  .legenda span{display:flex;align-items:center;gap:6px;}
+  .legenda i{width:16px;height:0;border-top-width:3px;border-top-style:solid;display:inline-block;}
+  .tbl{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:4px;}
+  .tbl td{padding:7px 6px;border-bottom:1px solid #f0f0ec;}
+  .tbl td.r{text-align:right;}
+  .tbl tr:last-child td{border-bottom:0;}
+  .tbl .grp{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;font-weight:700;padding-top:11px;}
+  .tbl .sub td{font-weight:700;border-top:1px solid var(--border);}
+  .tbl .net td{font-weight:700;font-size:13.5px;border-top:2px solid var(--header);border-bottom:0;padding-top:9px;}
+  .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px;vertical-align:baseline;}
+  .aguardando{padding:34px 14px;text-align:center;color:var(--muted);font-size:12px;line-height:1.5;}
+  footer{margin:18px 14px 0;padding-top:12px;border-top:1px solid var(--border);font-size:10px;color:var(--muted);display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px;}
+  .loading{padding:60px 0;text-align:center;color:var(--muted);font-size:13px;}
+  .erro{color:var(--red);font-size:12px;padding:14px;text-align:center;}
+  #tip{position:absolute;z-index:50;max-width:230px;background:var(--header);color:#fff;font-size:11.5px;line-height:1.45;padding:9px 11px;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.18);display:none;}
+  #tip::after{content:'';position:absolute;top:-5px;left:var(--ax,20px);border:5px solid transparent;border-bottom-color:var(--header);border-top:0;}
+  @media (max-width:430px){.kpi .value{font-size:21px;}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="head-row">
+      <div class="brand">
+        <div class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-6 10-6 10 6 10 6-3 6-10 6S2 12 2 12z"/><circle cx="9" cy="12" r="1" fill="#fff"/></svg></div>
+        <div><h1>Sir Fisher</h1><span>Caixa &amp; Projeção</span></div>
+      </div>
+      <div class="head-meta"><select id="mesSel" onchange="renderMes(this.value)"></select><div class="unidade">Caixa</div></div>
+    </div>
+    <nav class="tabs">
+      <a href="home.html">Visão Geral</a>
+      <a href="vendas.html">Vendas</a>
+      <a href="caixa.html" class="active">Caixa</a>
+      <span class="soon" title="Em breve">DRE</span>
+      <span class="soon" title="Em breve">Despesas</span>
+      <span class="soon" title="Em breve">Conciliação</span>
+    </nav>
+  </header>
+  <main id="main"><div class="loading">Carregando caixa…</div></main>
+  <footer id="rodape" style="display:none">
+    <span id="rodapeAtt"></span>
+    <span>Fonte: Stone · Banco do Brasil · lançamentos internos · <a href="#" id="verCargas" style="color:var(--teal);text-decoration:none">histórico de cargas</a></span>
+  </footer>
+</div>
+<div id="cargasBox" style="display:none;position:fixed;inset:0;background:rgba(18,49,63,.45);z-index:60;align-items:center;justify-content:center;padding:20px">
+  <div style="background:#fff;border-radius:12px;max-width:420px;width:100%;max-height:80vh;overflow:auto;padding:18px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <strong style="font-size:14px">Histórico de cargas</strong>
+      <span id="fecharCargas" style="cursor:pointer;color:var(--muted);font-size:18px">&times;</span>
+    </div>
+    <div id="cargasLista" style="font-size:12px"></div>
+  </div>
+</div>
+<div id="tip"></div>
+
+<script>
+const SUPABASE_URL="https://qqefegpievdlaprwzktx.supabase.co";
+const SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFxZWZlZ3BpZXZkbGFwcnd6a3R4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI0ODQxNzAsImV4cCI6MjA5ODA2MDE3MH0.1h_585aBtTnXtA0FLtbNvhkYpVokgfHbUpKcAIBImKY";
+const sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
+const C={header:'#12313F',teal:'#00A6A6',amber:'#D6A84F',green:'#2E7D5B',red:'#C94C4C',muted:'#6B7280',border:'#E5E7EB',brown:'#B98A2E',grey:'#9aa6b2'};
+const MESES=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+let CHARTS=[],SALDO_ATUAL=null,FIMMES=[],FLUXO=[],RC=[],RP=[],DF=[],DD=[],HOJE=null,ULTIMA=null,CARGAS=[];
+
+const DESC={
+  shoje:'Saldo consolidado das contas no último dia com dado real (Stone + bancos).',
+  sproj:'Saldo de caixa projetado para o fim do mês selecionado, mantido o ritmo atual de entradas e saídas.',
+  arec:'Recebíveis já vendidos que ainda vão liquidar nos próximos dias — não dependem de venda futura.',
+  smin:'Menor saldo projetado dentro do horizonte e a data em que ocorre: o ponto de maior aperto de caixa.'
+};
+
+function brl(v){if(v==null||isNaN(v))return '—';const a=Math.abs(v);if(a>=1e6)return 'R$ '+(v/1e6).toFixed(2).replace('.',',')+' mi';if(a>=1e3)return 'R$ '+(v/1e3).toFixed(1).replace('.',',')+' mil';return 'R$ '+v.toFixed(0);}
+function brl0(v){if(v==null||isNaN(v))return '—';const a=Math.abs(v);if(a>=1e6)return 'R$ '+(v/1e6).toFixed(1).replace('.',',')+' mi';if(a>=1e3)return 'R$ '+Math.round(v/1e3)+' mil';return 'R$ '+v.toFixed(0);}
+function rs(v){return v==null?'—':'R$ '+Number(v).toFixed(2).replace('.',',');}
+function num(v){return v==null?null:Number(v);}
+function ddmm(s){const p=s.split('-');return p[2]+'/'+p[1];}
+function ic(p){return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+p+'</svg>';}
+const ICON={wallet:'<path d="M3 6h16v12H3z"/><path d="M16 12h3"/>',bank:'<path d="M3 21h18M4 21V10l8-5 8 5v11M9 21v-7h6v7"/>',in:'<path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/>',low:'<path d="M3 7l6 6 4-4 8 8"/><path d="M21 17v-5h-5"/>'};
+
+function deltaVal(c,p){if(p==null||c==null)return '<div class="sub">vs mês anterior: —</div>';const d=c-p;return '<div class="sub '+(d>=0?'up':'down')+'"><b>'+(d>=0?'+':'−')+brl(Math.abs(d))+'</b> vs mês anterior</div>';}
+
+function kpi(label,iconKey,value,sub,color,descKey){
+  return '<div class="kpi"><span class="bar" style="background:'+(color||C.teal)+'"></span>'+
+    '<div class="label">'+ic(ICON[iconKey])+'<span class="txt">'+label+'</span>'+
+    '<span class="kpi-info" data-desc="'+DESC[descKey]+'">i</span></div>'+
+    '<div class="value" style="color:'+(color&&color!==C.teal?color:C.text)+'">'+value+'</div>'+(sub||'')+'</div>';
+}
+
+function sumMes(arr,anoMes){return arr.filter(r=>r.dia&&r.dia.slice(0,7)===anoMes).reduce((s,r)=>s+(Number(r.valor)||0),0);}
+
+async function main(){
+  try{
+    const [sa,fm,fx,rc,rp,df,dd,uc,cg]=await Promise.all([
+      sb.from('painel_saldo_atual').select('*'),
+      sb.from('painel_saldo_fim_mes').select('*').order('mes',{ascending:true}),
+      sb.from('painel_fluxo_caixa').select('*').order('dia',{ascending:true}),
+      sb.from('recebimento_conhecido').select('*'),
+      sb.from('recebimento_projetado').select('*'),
+      sb.from('projecao_despesa_fixa').select('*'),
+      sb.from('projecao_despesa_direta').select('*'),
+      sb.from('painel_ultima_carga').select('ultima'),
+      sb.from('painel_cargas').select('*')
+    ]);
+    if(fx.error)throw fx.error;
+    SALDO_ATUAL=(!sa.error&&sa.data&&sa.data[0])?sa.data[0]:null;
+    FIMMES=fm.error?[]:(fm.data||[]);
+    FLUXO=fx.data||[];
+    RC=rc.error?[]:(rc.data||[]); RP=rp.error?[]:(rp.data||[]);
+    DF=df.error?[]:(df.data||[]); DD=dd.error?[]:(dd.data||[]);
+    ULTIMA=(!uc.error&&uc.data&&uc.data[0])?uc.data[0].ultima:null;
+    CARGAS=cg.error?[]:(cg.data||[]);
+    HOJE=SALDO_ATUAL?SALDO_ATUAL.data_ref:(FLUXO.filter(r=>r.tipo==='real').slice(-1)[0]||{}).dia;
+
+    if(!FIMMES.length)throw new Error('Sem meses de projeção disponíveis.');
+    const sel=document.getElementById('mesSel');
+    sel.innerHTML=FIMMES.map(x=>{const d=new Date(x.mes);return '<option value="'+x.ano_mes+'">'+MESES[d.getUTCMonth()]+' '+d.getUTCFullYear()+'</option>';}).join('');
+    const mesHoje=HOJE?HOJE.slice(0,7):FIMMES[FIMMES.length-1].ano_mes;
+    sel.value=FIMMES.some(x=>x.ano_mes===mesHoje)?mesHoje:FIMMES[FIMMES.length-1].ano_mes;
+    renderMes(sel.value);
+
+    if(ULTIMA){const d=new Date(ULTIMA);document.getElementById('rodapeAtt').textContent='Atualizado em '+String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear()+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');}
+    else{document.getElementById('rodapeAtt').textContent='Atualizado: —';}
+    const lista=document.getElementById('cargasLista');
+    lista.innerHTML=CARGAS.length
+      ? CARGAS.map(c=>'<div style="padding:7px 0;border-bottom:1px solid var(--border)"><b>'+c.quando+'</b><br><span style="color:var(--muted)">'+c.fontes+'</span></div>').join('')
+      : '<div style="color:var(--muted)">Ainda sem registros de carga.</div>';
+    document.getElementById('rodape').style.display='flex';
+  }catch(e){document.getElementById('main').innerHTML='<div class="erro">Não foi possível carregar os dados: '+(e.message||e)+'</div>';}
+}
+
+function renderMes(anoMes){
+  CHARTS.forEach(c=>{try{c.destroy()}catch(e){}});CHARTS=[];
+
+  // KPI saldo hoje
+  const shoje=SALDO_ATUAL?num(SALDO_ATUAL.saldo_atual):null;
+  const scomp=SALDO_ATUAL?num(SALDO_ATUAL.saldo_comp):null;
+  const subHoje=(SALDO_ATUAL?('<div class="sub">em '+ddmm(SALDO_ATUAL.data_ref)+' · consolidado</div>'+deltaVal(shoje,scomp)):'<div class="sub">—</div>');
+
+  // KPI saldo projetado do mes
+  const fmRow=FIMMES.find(x=>x.ano_mes===anoMes);
+  const sproj=fmRow?num(fmRow.saldo_fim):null;
+  const subProj='<div class="sub">'+(fmRow&&fmRow.situacao?fmRow.situacao:'projeção')+'</div>';
+
+  // KPI a receber conhecido (futuro)
+  const arec=RC.filter(r=>HOJE&&r.dia>=HOJE).reduce((s,r)=>s+(Number(r.valor)||0),0);
+
+  // KPI menor saldo projetado no horizonte
+  let minVal=Infinity,minDia=null;
+  FLUXO.forEach(r=>{if(r.tipo!=='real'){const v=num(r.saldo_projetado!=null?r.saldo_projetado:r.saldo);if(v!=null&&v<minVal){minVal=v;minDia=r.dia;}}});
+  const temMin=minDia!==null;
+  const minColor=temMin?(minVal<0?C.red:(minVal<(shoje||0)*0.3?C.amber:C.green)):C.muted;
+
+  const html=`
+    <div class="section-title">Posição de hoje</div>
+    <div class="kpis">
+      ${kpi('Saldo em caixa','wallet',brl(shoje),subHoje,C.header,'shoje')}
+      ${kpi('A receber (já vendido)','in',brl(arec),'<div class="sub">recebíveis a liquidar</div>',C.teal,'arec')}
+      ${kpi('Saldo projetado (fim do mês)','bank',brl(sproj),subProj,C.amber,'sproj')}
+      ${kpi('Menor saldo no horizonte','low',temMin?brl(minVal):'—',temMin?('<div class="sub">em <b>'+ddmm(minDia)+'</b></div>'):'<div class="sub">—</div>',minColor,'smin')}
+    </div>
+
+    <div class="section-title">Projeção de caixa</div>
+    <div class="card">
+      <h3>Curva de saldo — realizado e projetado</h3>
+      <div class="hint">Linha cheia: saldo real até hoje · tracejado: projeção até o horizonte</div>
+      <div class="chart-wrap h-curve"><canvas id="curva"></canvas></div>
+      <div class="legenda">
+        <span><i style="border-color:${C.teal}"></i>Realizado</span>
+        <span><i style="border-color:${C.amber};border-top-style:dashed"></i>Projetado</span>
+        <span><i style="border-color:${C.muted};border-top-style:dotted"></i>Hoje</span>
+      </div>
+    </div>
+
+    <div class="section-title">Fluxo do mês selecionado</div>
+    <div class="card">
+      <h3>Entradas e saídas projetadas</h3>
+      <div class="hint">Composição do que movimenta o caixa no mês — ${MESES[new Date(fmRow?fmRow.mes:anoMes+'-01').getUTCMonth()]}</div>
+      <div id="flowBox"></div>
+    </div>
+  `;
+  document.getElementById('main').innerHTML=html;
+
+  drawCurva();
+  drawFlow(anoMes);
+}
+
+// plugin: linha vertical no "hoje" + marcador no menor saldo
+function marks(hojeIdx,minIdx,minVal){return {id:'marks',afterDatasetsDraw(ch){
+  const{ctx,scales:{x,y}}=ch;ctx.save();
+  if(hojeIdx>=0){const px=x.getPixelForValue(hojeIdx);ctx.strokeStyle=C.muted;ctx.setLineDash([3,3]);ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(px,y.top);ctx.lineTo(px,y.bottom);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle=C.muted;ctx.font='600 10px Roboto,Arial';ctx.textAlign='center';ctx.fillText('hoje',px,y.top-3);}
+  if(minIdx>=0){const px=x.getPixelForValue(minIdx),py=y.getPixelForValue(minVal);ctx.fillStyle=minVal<0?C.red:C.amber;ctx.beginPath();ctx.arc(px,py,4,0,6.283);ctx.fill();ctx.font='700 10px Roboto,Arial';ctx.textAlign=px>ch.width-70?'right':'left';ctx.fillText(brl(minVal),px+(px>ch.width-70?-7:7),py-7);}
+  ctx.restore();
+}};}
+
+function drawCurva(){
+  if(!FLUXO.length){document.getElementById('curva').parentElement.innerHTML='<div class="aguardando">Sem dados de fluxo de caixa.</div>';return;}
+  const labels=FLUXO.map(r=>ddmm(r.dia));
+  let lastReal=-1;FLUXO.forEach((r,i)=>{if(r.tipo==='real')lastReal=i;});
+  const real=FLUXO.map(r=>r.tipo==='real'?num(r.saldo_real!=null?r.saldo_real:r.saldo):null);
+  const proj=FLUXO.map((r,i)=>r.tipo!=='real'?num(r.saldo_projetado!=null?r.saldo_projetado:r.saldo):(i===lastReal?num(r.saldo_real!=null?r.saldo_real:r.saldo):null));
+  let minVal=Infinity,minIdx=-1;FLUXO.forEach((r,i)=>{if(r.tipo!=='real'){const v=num(r.saldo_projetado!=null?r.saldo_projetado:r.saldo);if(v!=null&&v<minVal){minVal=v;minIdx=i;}}});
+  if(minIdx<0)minVal=null;
+
+  CHARTS.push(new Chart(document.getElementById('curva'),{type:'line',
+    data:{labels,datasets:[
+      {label:'Realizado',data:real,borderColor:C.teal,backgroundColor:'rgba(0,166,166,.10)',borderWidth:2.2,fill:true,pointRadius:0,tension:.15,spanGaps:false},
+      {label:'Projetado',data:proj,borderColor:C.amber,borderWidth:2,borderDash:[5,4],fill:false,pointRadius:0,tension:.15,spanGaps:true}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+      plugins:{legend:{display:false},tooltip:{callbacks:{title:items=>items[0].label,label:c=>c.parsed.y==null?null:' '+c.dataset.label+': '+brl(c.parsed.y)}}},
+      scales:{y:{grid:{color:C.border},ticks:{callback:v=>brl(v),font:{size:10}}},x:{grid:{display:false},ticks:{font:{size:9},maxRotation:0,autoSkip:true,maxTicksLimit:9}}}},
+    plugins:[marks(lastReal,minIdx,minVal)]}));
+}
+
+function drawFlow(anoMes){
+  const box=document.getElementById('flowBox');
+  const recCon=sumMes(RC,anoMes), recProj=sumMes(RP,anoMes);
+  const despFix=sumMes(DF,anoMes), despDir=sumMes(DD,anoMes);
+  const entradas=recCon+recProj, saidas=despFix+despDir, net=entradas-saidas;
+  const temProj=Math.abs(entradas)>0.5||Math.abs(saidas)>0.5;
+
+  if(!temProj){
+    // mes sem projecao (provavelmente ja realizado) -> mostra resultado realizado do fluxo
+    const realRes=FLUXO.filter(r=>r.dia.slice(0,7)===anoMes&&r.tipo==='real').reduce((s,r)=>s+(Number(r.resultado_dia)||0),0);
+    box.innerHTML='<div class="aguardando">Mês sem projeção ativa (já realizado).<br>Resultado de caixa realizado no mês: <b style="color:'+(realRes>=0?C.green:C.red)+'">'+brl(realRes)+'</b></div>';
+    return;
+  }
+
+  box.innerHTML=`
+    <div class="chart-wrap h-flow"><canvas id="flow"></canvas></div>
+    <table class="tbl">
+      <tr class="grp"><td>Entradas</td><td class="r"></td></tr>
+      <tr><td><span class="dot" style="background:${C.teal}"></span>Recebimento já vendido</td><td class="r">${brl(recCon)}</td></tr>
+      <tr><td><span class="dot" style="background:${C.green}"></span>Recebimento projetado</td><td class="r">${brl(recProj)}</td></tr>
+      <tr class="sub"><td>Subtotal entradas</td><td class="r">${brl(entradas)}</td></tr>
+      <tr class="grp"><td>Saídas</td><td class="r"></td></tr>
+      <tr><td><span class="dot" style="background:${C.red}"></span>Despesa fixa</td><td class="r">${brl(despFix)}</td></tr>
+      <tr><td><span class="dot" style="background:${C.amber}"></span>Despesa direta</td><td class="r">${brl(despDir)}</td></tr>
+      <tr class="sub"><td>Subtotal saídas</td><td class="r">${brl(saidas)}</td></tr>
+      <tr class="net"><td>Resultado projetado do mês</td><td class="r" style="color:${net>=0?C.green:C.red}">${brl(net)}</td></tr>
+    </table>`;
+
+  CHARTS.push(new Chart(document.getElementById('flow'),{type:'bar',
+    data:{labels:['Entradas','Saídas'],datasets:[
+      {label:'Já vendido / Fixa',data:[recCon,despFix],backgroundColor:[C.teal,C.red],stack:'s',borderRadius:3,maxBarThickness:70},
+      {label:'Projetado / Direta',data:[recProj,despDir],backgroundColor:[C.green,C.amber],stack:'s',borderRadius:3,maxBarThickness:70}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+brl(c.parsed.y)}}},
+      scales:{y:{stacked:true,grid:{color:C.border},ticks:{callback:v=>brl(v),font:{size:10}}},x:{stacked:true,grid:{display:false},ticks:{font:{size:12},color:C.text}}}}}));
+}
+
+// tooltip dos KPIs
+const tip=document.getElementById('tip');
+document.addEventListener('click',e=>{
+  const info=e.target.closest('.kpi-info');
+  if(info){e.stopPropagation();tip.textContent=info.getAttribute('data-desc');tip.style.display='block';
+    const r=info.getBoundingClientRect();let left=r.left+window.scrollX-20;
+    const maxLeft=window.scrollX+document.documentElement.clientWidth-tip.offsetWidth-8;
+    if(left>maxLeft)left=maxLeft; if(left<8)left=8;
+    tip.style.left=left+'px';tip.style.top=(r.bottom+window.scrollY+8)+'px';
+    tip.style.setProperty('--ax',(r.left+window.scrollX-left)+'px');
+  }else if(!e.target.closest('#tip')){tip.style.display='none';}
+});
+window.addEventListener('scroll',()=>tip.style.display='none');
+
+const cargasBox=document.getElementById('cargasBox');
+document.getElementById('verCargas').addEventListener('click',e=>{e.preventDefault();cargasBox.style.display='flex';});
+document.getElementById('fecharCargas').addEventListener('click',()=>cargasBox.style.display='none');
+cargasBox.addEventListener('click',e=>{if(e.target===cargasBox)cargasBox.style.display='none';});
+
+main();
+</script>
+</body>
+</html>
