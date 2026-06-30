@@ -111,22 +111,25 @@ const SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYm
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
 const C={header:'#12313F',teal:'#00A6A6',amber:'#D6A84F',green:'#2E7D5B',red:'#C94C4C',muted:'#6B7280',border:'#E5E7EB',brown:'#B98A2E',grey:'#9aa6b2'};
 const MESES=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-let CHARTS=[],SALDO_ATUAL=null,FIMMES=[],FLUXO=[],RC=[],RP=[],DF=[],DD=[],HOJE=null,ULTIMA=null,CARGAS=[];
+let CHARTS=[],SALDO_ATUAL=null,FIMMES=[],FLUXO=[],RC=[],RP=[],DF=[],DD=[],CONTAS=[],HOJE=null,ULTIMA=null,CARGAS=[];
+const PISO=100000; // saldo minimo de seguranca definido pelo Rogerio
 
 const DESC={
   shoje:'Saldo consolidado das contas no último dia com dado real (Stone + bancos).',
   sproj:'Saldo de caixa projetado para o fim do mês selecionado, mantido o ritmo atual de entradas e saídas.',
   arec:'Recebíveis já vendidos que ainda vão liquidar nos próximos dias — não dependem de venda futura.',
-  smin:'Menor saldo projetado dentro do horizonte e a data em que ocorre: o ponto de maior aperto de caixa.'
+  smin:'Menor saldo projetado dentro do horizonte e a data em que ocorre: o ponto de maior aperto de caixa.',
+  piso:'Saldo mínimo de segurança definido: R$ 100 mil. Mostra em quantos dias, a partir de hoje, o saldo projetado cruza esse piso pela primeira vez.'
 };
 
 function brl(v){if(v==null||isNaN(v))return '—';const a=Math.abs(v);if(a>=1e6)return 'R$ '+(v/1e6).toFixed(2).replace('.',',')+' mi';if(a>=1e3)return 'R$ '+(v/1e3).toFixed(1).replace('.',',')+' mil';return 'R$ '+v.toFixed(0);}
 function brl0(v){if(v==null||isNaN(v))return '—';const a=Math.abs(v);if(a>=1e6)return 'R$ '+(v/1e6).toFixed(1).replace('.',',')+' mi';if(a>=1e3)return 'R$ '+Math.round(v/1e3)+' mil';return 'R$ '+v.toFixed(0);}
+function brlK(v){if(v==null||isNaN(v))return '—';const a=Math.abs(v);if(a>=1e6)return 'R$ '+Math.round(v/1e3)+'k';if(a>=1e3)return 'R$ '+Math.round(v/1e3)+'k';return 'R$ '+Math.round(v);}
 function rs(v){return v==null?'—':'R$ '+Number(v).toFixed(2).replace('.',',');}
 function num(v){return v==null?null:Number(v);}
 function ddmm(s){const p=s.split('-');return p[2]+'/'+p[1];}
 function ic(p){return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+p+'</svg>';}
-const ICON={wallet:'<path d="M3 6h16v12H3z"/><path d="M16 12h3"/>',bank:'<path d="M3 21h18M4 21V10l8-5 8 5v11M9 21v-7h6v7"/>',in:'<path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/>',low:'<path d="M3 7l6 6 4-4 8 8"/><path d="M21 17v-5h-5"/>'};
+const ICON={wallet:'<path d="M3 6h16v12H3z"/><path d="M16 12h3"/>',bank:'<path d="M3 21h18M4 21V10l8-5 8 5v11M9 21v-7h6v7"/>',in:'<path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/>',low:'<path d="M3 7l6 6 4-4 8 8"/><path d="M21 17v-5h-5"/>',alert:'<path d="M12 9v4"/><circle cx="12" cy="16.2" r=".4" fill="currentColor"/><path d="M10.3 3.9L1.8 18a1.8 1.8 0 001.6 2.7h17.2a1.8 1.8 0 001.6-2.7L13.7 3.9a1.8 1.8 0 00-3.4 0z"/>'};
 
 function deltaVal(c,p){if(p==null||c==null)return '<div class="sub">vs mês anterior: —</div>';const d=c-p;return '<div class="sub '+(d>=0?'up':'down')+'"><b>'+(d>=0?'+':'−')+brl(Math.abs(d))+'</b> vs mês anterior</div>';}
 
@@ -152,6 +155,8 @@ async function main(){
       sb.from('painel_ultima_carga').select('ultima'),
       sb.from('painel_cargas').select('*')
     ]);
+    const ct=await sb.from('painel_saldo_por_conta').select('*');
+    CONTAS=ct.error?[]:(ct.data||[]);
     if(fx.error)throw fx.error;
     SALDO_ATUAL=(!sa.error&&sa.data&&sa.data[0])?sa.data[0]:null;
     FIMMES=fm.error?[]:(fm.data||[]);
@@ -185,7 +190,7 @@ function renderMes(anoMes){
   // KPI saldo hoje
   const shoje=SALDO_ATUAL?num(SALDO_ATUAL.saldo_atual):null;
   const scomp=SALDO_ATUAL?num(SALDO_ATUAL.saldo_comp):null;
-  const subHoje=(SALDO_ATUAL?('<div class="sub">em '+ddmm(SALDO_ATUAL.data_ref)+' · consolidado</div>'+deltaVal(shoje,scomp)):'<div class="sub">—</div>');
+  const subHoje=(SALDO_ATUAL?deltaVal(shoje,scomp):'<div class="sub">—</div>');
 
   // KPI saldo projetado do mes
   const fmRow=FIMMES.find(x=>x.ano_mes===anoMes);
@@ -201,24 +206,45 @@ function renderMes(anoMes){
   const temMin=minDia!==null;
   const minColor=temMin?(minVal<0?C.red:(minVal<(shoje||0)*0.3?C.amber:C.green)):C.muted;
 
+  // KPI: dias ate cruzar o piso de seguranca (primeiro dia projetado < PISO, a partir de hoje)
+  let pisoDia=null,pisoDias=null;
+  const cruz=FLUXO.find(r=>r.tipo!=='real'&&HOJE&&r.dia>HOJE&&num(r.saldo_projetado!=null?r.saldo_projetado:r.saldo)<PISO);
+  if(cruz){pisoDia=cruz.dia;const d1=new Date(HOJE),d2=new Date(pisoDia);pisoDias=Math.round((d2-d1)/86400000);}
+  const jaAbaixo=shoje!=null&&shoje<PISO;
+  let pisoColor=C.green,pisoVal='—',pisoSub='<div class="sub">não cruza no horizonte</div>';
+  if(jaAbaixo){pisoColor=C.red;pisoVal='Abaixo';pisoSub='<div class="sub down">saldo de hoje já está sob o piso</div>';}
+  else if(pisoDia){pisoColor=pisoDias<=30?C.red:(pisoDias<=60?C.amber:C.green);pisoVal=pisoDias+' dias';pisoSub='<div class="sub">cruza em <b>'+ddmm(pisoDia)+'</b></div>';}
+
   const html=`
     <div class="section-title">Posição de hoje</div>
     <div class="kpis">
-      ${kpi('Saldo em caixa','wallet',brl(shoje),subHoje,C.header,'shoje')}
+      ${kpi('Saldo em caixa','wallet',brl0(shoje),subHoje,C.header,'shoje')}
       ${kpi('A receber (já vendido)','in',brl(arec),'<div class="sub">recebíveis a liquidar</div>',C.teal,'arec')}
-      ${kpi('Saldo projetado (fim do mês)','bank',brl(sproj),subProj,C.amber,'sproj')}
+      ${kpi('Saldo projetado (fim do mês)','bank',brl0(sproj),subProj,C.amber,'sproj')}
       ${kpi('Menor saldo no horizonte','low',temMin?brl(minVal):'—',temMin?('<div class="sub">em <b>'+ddmm(minDia)+'</b></div>'):'<div class="sub">—</div>',minColor,'smin')}
+      ${kpi('Até o piso de segurança','alert',pisoVal,pisoSub,pisoColor,'piso')}
+    </div>
+
+    <div class="card" style="margin-top:14px">
+      <h3>Onde está o dinheiro</h3>
+      <div class="hint">Saldo por conta no fechamento do último dia com dado real</div>
+      <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
+        <div class="chart-wrap" style="height:170px;width:170px;flex-shrink:0"><canvas id="contas"></canvas></div>
+        <div id="contasTbl" style="flex:1;min-width:200px"></div>
+      </div>
     </div>
 
     <div class="section-title">Projeção de caixa</div>
     <div class="card">
       <h3>Curva de saldo — realizado e projetado</h3>
-      <div class="hint">Linha cheia: saldo real até hoje · tracejado: projeção até o horizonte</div>
+      <div class="hint" id="curvaHint">Carregando período…</div>
       <div class="chart-wrap h-curve"><canvas id="curva"></canvas></div>
       <div class="legenda">
         <span><i style="border-color:${C.teal}"></i>Realizado</span>
         <span><i style="border-color:${C.amber};border-top-style:dashed"></i>Projetado</span>
-        <span><i style="border-color:${C.muted};border-top-style:dotted"></i>Hoje</span>
+        <span><i style="border-color:${C.header};border-top:0;width:8px;height:8px;border-radius:50%;background:${C.header}"></i>Saldo no fechamento do mês</span>
+        <span><i style="border-color:${C.teal};border-top-style:dashed"></i>Fim do mês selecionado</span>
+        <span><i style="border-color:${C.red};border-top-style:dotted"></i>Piso de segurança (R$ 100 mil)</span>
       </div>
     </div>
 
@@ -231,26 +257,58 @@ function renderMes(anoMes){
   `;
   document.getElementById('main').innerHTML=html;
 
-  drawCurva();
+  drawCurva(anoMes);
   drawFlow(anoMes);
+  drawContas();
 }
 
 // plugin: linha vertical no "hoje" + marcador no menor saldo
-function marks(hojeIdx,minIdx,minVal){return {id:'marks',afterDatasetsDraw(ch){
+function marks(hojeIdx,hojeVal,minIdx,minVal,refIdx,refLabel,refVal){return {id:'marks',afterDatasetsDraw(ch){
   const{ctx,scales:{x,y}}=ch;ctx.save();
-  if(hojeIdx>=0){const px=x.getPixelForValue(hojeIdx);ctx.strokeStyle=C.muted;ctx.setLineDash([3,3]);ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(px,y.top);ctx.lineTo(px,y.bottom);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle=C.muted;ctx.font='600 10px Roboto,Arial';ctx.textAlign='center';ctx.fillText('hoje',px,y.top-3);}
-  if(minIdx>=0){const px=x.getPixelForValue(minIdx),py=y.getPixelForValue(minVal);ctx.fillStyle=minVal<0?C.red:C.amber;ctx.beginPath();ctx.arc(px,py,4,0,6.283);ctx.fill();ctx.font='700 10px Roboto,Arial';ctx.textAlign=px>ch.width-70?'right':'left';ctx.fillText(brl(minVal),px+(px>ch.width-70?-7:7),py-7);}
+  if(PISO>=y.min&&PISO<=y.max){const py=y.getPixelForValue(PISO);ctx.strokeStyle=C.red;ctx.setLineDash([2,3]);ctx.lineWidth=1.2;ctx.beginPath();ctx.moveTo(x.left,py);ctx.lineTo(x.right,py);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle=C.red;ctx.font='600 10px Roboto,Arial';ctx.textAlign='left';ctx.fillText('piso '+brlK(PISO),x.left+4,py-4);}
+  if(refIdx>=0){
+    const px=x.getPixelForValue(refIdx);
+    ctx.strokeStyle=C.teal;ctx.setLineDash([6,3]);ctx.lineWidth=1.4;ctx.beginPath();ctx.moveTo(px,y.top);ctx.lineTo(px,y.bottom);ctx.stroke();ctx.setLineDash([]);
+    const align=px>ch.width-70?'right':'left';const tx=px+(align==='right'?-7:7);
+    ctx.fillStyle=C.teal;ctx.font='700 10px Roboto,Arial';ctx.textAlign=align;ctx.fillText(refLabel,tx,y.top+11);
+    if(refVal!=null){ctx.fillStyle=C.header;ctx.font='700 12px Roboto,Arial';ctx.fillText(brlK(refVal),tx,y.top+26);}
+  }
+  if(minIdx>=0&&minIdx!==refIdx){const px=x.getPixelForValue(minIdx),py=y.getPixelForValue(minVal);ctx.fillStyle=minVal<0?C.red:C.amber;ctx.beginPath();ctx.arc(px,py,4,0,6.283);ctx.fill();ctx.font='700 12px Roboto,Arial';ctx.textAlign=px>ch.width-70?'right':'left';ctx.fillText(brlK(minVal),px+(px>ch.width-70?-7:7),py-8);}
   ctx.restore();
 }};}
 
-function drawCurva(){
+function drawCurva(anoMes){
   if(!FLUXO.length){document.getElementById('curva').parentElement.innerHTML='<div class="aguardando">Sem dados de fluxo de caixa.</div>';return;}
-  const labels=FLUXO.map(r=>ddmm(r.dia));
-  let lastReal=-1;FLUXO.forEach((r,i)=>{if(r.tipo==='real')lastReal=i;});
-  const real=FLUXO.map(r=>r.tipo==='real'?num(r.saldo_real!=null?r.saldo_real:r.saldo):null);
-  const proj=FLUXO.map((r,i)=>r.tipo!=='real'?num(r.saldo_projetado!=null?r.saldo_projetado:r.saldo):(i===lastReal?num(r.saldo_real!=null?r.saldo_real:r.saldo):null));
-  let minVal=Infinity,minIdx=-1;FLUXO.forEach((r,i)=>{if(r.tipo!=='real'){const v=num(r.saldo_projetado!=null?r.saldo_projetado:r.saldo);if(v!=null&&v<minVal){minVal=v;minIdx=i;}}});
+  // janela movel: ancorada no ULTIMO DIA DO MES SELECIONADO -> 6 meses pra tras / 90 dias pra frente.
+  // quando o mes selecionado e o atual, isso equivale a 6m atras / 90d a frente de hoje.
+  let win=FLUXO;
+  const ref=new Date(anoMes+'-01T00:00:00');
+  ref.setMonth(ref.getMonth()+1);ref.setDate(0); // ultimo dia do mes selecionado
+  const ini=new Date(ref);ini.setMonth(ini.getMonth()-6);
+  const fim=new Date(ref);fim.setDate(fim.getDate()+90);
+  const iniStr=ini.toISOString().slice(0,10), fimStr=fim.toISOString().slice(0,10);
+  win=FLUXO.filter(r=>r.dia>=iniStr&&r.dia<=fimStr);
+  if(!win.length)win=FLUXO;
+  const hintEl=document.getElementById('curvaHint');
+  if(hintEl){
+    const diasProjetados=win.filter(r=>r.tipo!=='real').length;
+    hintEl.textContent='Período exibido: '+ddmm(iniStr)+' a '+ddmm(fimStr)+' · '+diasProjetados+' dias de projeção à frente';
+  }
+  const labels=win.map(r=>ddmm(r.dia));
+  let lastReal=-1;win.forEach((r,i)=>{if(r.tipo==='real')lastReal=i;});
+  const real=win.map(r=>r.tipo==='real'?num(r.saldo_real!=null?r.saldo_real:r.saldo):null);
+  const proj=win.map((r,i)=>r.tipo!=='real'?num(r.saldo_projetado!=null?r.saldo_projetado:r.saldo):(i===lastReal?num(r.saldo_real!=null?r.saldo_real:r.saldo):null));
+  let minVal=Infinity,minIdx=-1;win.forEach((r,i)=>{if(r.tipo!=='real'){const v=num(r.saldo_projetado!=null?r.saldo_projetado:r.saldo);if(v!=null&&v<minVal){minVal=v;minIdx=i;}}});
   if(minIdx<0)minVal=null;
+  // marcador de "hoje" so usado p/ saber ate onde a linha e solida (nao desenha mais texto separado)
+  const hojeIdx=(HOJE&&HOJE>=iniStr&&HOJE<=fimStr)?win.findIndex(r=>r.dia===HOJE):-1;
+  // marcador do ultimo dia do mes selecionado (referencia da janela)
+  const refStr=ref.toISOString().slice(0,10);
+  let refIdx=win.findIndex(r=>r.dia===refStr);
+  if(refIdx<0){ // se nao houver linha exatamente nesse dia (ex. fim de mes futuro sem projecao), pega o mais proximo <= ref
+    for(let i=win.length-1;i>=0;i--){if(win[i].dia<=refStr){refIdx=i;break;}}
+  }
+  const refVal=refIdx>=0?(real[refIdx]!=null?real[refIdx]:proj[refIdx]):null;
 
   CHARTS.push(new Chart(document.getElementById('curva'),{type:'line',
     data:{labels,datasets:[
@@ -259,8 +317,8 @@ function drawCurva(){
     ]},
     options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
       plugins:{legend:{display:false},tooltip:{callbacks:{title:items=>items[0].label,label:c=>c.parsed.y==null?null:' '+c.dataset.label+': '+brl(c.parsed.y)}}},
-      scales:{y:{grid:{color:C.border},ticks:{callback:v=>brl(v),font:{size:10}}},x:{grid:{display:false},ticks:{font:{size:9},maxRotation:0,autoSkip:true,maxTicksLimit:9}}}},
-    plugins:[marks(lastReal,minIdx,minVal)]}));
+      scales:{y:{grid:{color:C.border},ticks:{callback:v=>brlK(v),font:{size:10}}},x:{grid:{display:false},ticks:{font:{size:9},maxRotation:0,autoSkip:true,maxTicksLimit:9}}}},
+    plugins:[marks(hojeIdx,null,minIdx,minVal,refIdx,ddmm(refStr),refVal)]}));
 }
 
 function drawFlow(anoMes){
@@ -299,6 +357,31 @@ function drawFlow(anoMes){
     options:{responsive:true,maintainAspectRatio:false,
       plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+brl(c.parsed.y)}}},
       scales:{y:{stacked:true,grid:{color:C.border},ticks:{callback:v=>brl(v),font:{size:10}}},x:{stacked:true,grid:{display:false},ticks:{font:{size:12},color:C.text}}}}}));
+}
+
+function corConta(nome){
+  const s=(nome||'').toLowerCase();
+  if(s.includes('stone'))return C.teal;
+  if(s.includes('brasil')||s==='bb')return C.amber;
+  if(s.includes('btg'))return C.header;
+  if(s.includes('inter'))return C.green;
+  if(s.includes('nordeste')||s.includes('bnb'))return C.red;
+  if(s.includes('espéc')||s.includes('espec')||s.includes('dinheiro'))return C.brown;
+  return C.grey;
+}
+
+function drawContas(){
+  const wrap=document.getElementById('contas').parentElement;
+  const tbl=document.getElementById('contasTbl');
+  if(!CONTAS.length){wrap.innerHTML='<div class="aguardando" style="padding:18px">Aguardando saldo por conta.</div>';tbl.innerHTML='';return;}
+  const rows=CONTAS.map(r=>({conta:r.conta,saldo:Number(r.saldo)||0,cor:corConta(r.conta)})).sort((a,b)=>b.saldo-a.saldo);
+  const total=rows.reduce((s,r)=>s+r.saldo,0)||1;
+  CHARTS.push(new Chart(document.getElementById('contas'),{type:'doughnut',
+    data:{labels:rows.map(r=>r.conta),datasets:[{data:rows.map(r=>r.saldo),backgroundColor:rows.map(r=>r.cor),borderColor:'#fff',borderWidth:2}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'60%',
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+c.label+': '+brl(c.parsed)+' ('+(c.parsed/total*100).toFixed(0)+'%)'}}}}}));
+  tbl.innerHTML='<table class="tbl">'+rows.map(r=>'<tr><td><span class="dot" style="background:'+r.cor+'"></span>'+r.conta+'</td><td class="r">'+brl0(r.saldo)+'</td><td class="r" style="color:var(--muted)">'+(r.saldo/total*100).toFixed(0)+'%</td></tr>').join('')+
+    '<tr class="net"><td>Total</td><td class="r">'+brl0(total)+'</td><td class="r"></td></tr></table>';
 }
 
 // tooltip dos KPIs
