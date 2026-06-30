@@ -23,7 +23,13 @@
   .head-meta{text-align:right;flex-shrink:0;}
   .head-meta select{background:#1b3d4d;color:#fff;border:1px solid #2c5468;border-radius:8px;padding:6px 10px;font-family:inherit;font-size:13px;font-weight:500;cursor:pointer;}
   .head-meta .unidade{font-size:10.5px;color:#9fb3bd;margin-top:3px;}
-  .head-line{height:3px;background:var(--teal);margin-top:12px;border-radius:2px;}
+  /* navegacao entre as 6 paginas */
+  .tabs{display:flex;gap:1px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;border-top:1px solid #21465a;margin-top:12px;}
+  .tabs::-webkit-scrollbar{display:none;}
+  .tabs a,.tabs span{flex-shrink:0;padding:9px 13px 10px;font-size:12.5px;font-weight:500;color:#9fb3bd;text-decoration:none;border-bottom:2.5px solid transparent;white-space:nowrap;}
+  .tabs a:hover{color:#dce8ec;}
+  .tabs a.active{color:#fff;border-bottom-color:var(--teal);font-weight:700;}
+  .tabs span.soon{color:#52707d;cursor:default;}
   main{padding:16px 14px 0;}
   .section-title{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin:22px 4px 10px;}
   .section-title:first-child{margin-top:6px;}
@@ -75,7 +81,14 @@
       </div>
       <div class="head-meta"><select id="mesSel" onchange="renderMes(this.value)"></select><div class="unidade">Visão geral</div></div>
     </div>
-    <div class="head-line"></div>
+    <nav class="tabs">
+      <a href="home.html" class="active">Visão Geral</a>
+      <a href="vendas.html">Vendas</a>
+      <span class="soon" title="Em breve">Caixa</span>
+      <span class="soon" title="Em breve">DRE</span>
+      <span class="soon" title="Em breve">Despesas</span>
+      <span class="soon" title="Em breve">Conciliação</span>
+    </nav>
   </header>
   <main id="main"><div class="loading">Carregando indicadores…</div></main>
   <footer id="rodape" style="display:none">
