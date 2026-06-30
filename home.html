@@ -51,9 +51,16 @@
   .bullet{margin-top:6px;}
   .bullet-track{position:relative;height:22px;background:#EFece3;border-radius:6px;overflow:visible;}
   .bullet-fill{position:absolute;left:0;top:0;bottom:0;border-radius:6px;}
-  .bullet-meta{position:absolute;top:-4px;bottom:-4px;width:3px;background:var(--amber);border-radius:2px;}
-  .bullet-meta::after{content:'Meta';position:absolute;top:-15px;left:50%;transform:translateX(-50%);font-size:9px;color:var(--amber);font-weight:700;white-space:nowrap;}
-  .bullet-labels{display:flex;justify-content:space-between;margin-top:9px;font-size:10.5px;color:var(--muted);}
+  .bullet-mark{position:absolute;top:-4px;bottom:-4px;width:3px;border-radius:2px;}
+  .bullet-mark.proj{background:var(--teal);}
+  .bullet-mark.meta{background:var(--amber);}
+  .bullet-mark::after{position:absolute;top:-15px;left:50%;transform:translateX(-50%);font-size:9px;font-weight:700;white-space:nowrap;}
+  .bullet-mark.proj::after{content:'Proj.';color:var(--teal);}
+  .bullet-mark.meta::after{content:'Meta';color:var(--amber);}
+  .bullet-leg{display:flex;flex-wrap:wrap;gap:10px;margin-top:11px;font-size:10.5px;color:var(--muted);}
+  .bullet-leg span{display:flex;align-items:center;gap:5px;}
+  .bullet-leg i{width:10px;height:10px;border-radius:3px;display:inline-block;}
+  .bullet-leg i.tick{width:3px;height:12px;border-radius:1px;}
   footer{margin:18px 14px 0;padding-top:12px;border-top:1px solid var(--border);font-size:10px;color:var(--muted);display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px;}
   .loading{padding:60px 0;text-align:center;color:var(--muted);font-size:13px;}
   .erro{color:var(--red);font-size:12px;padding:14px;text-align:center;}
@@ -70,12 +77,24 @@
         <div class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-6 10-6 10 6 10 6-3 6-10 6S2 12 2 12z"/><circle cx="9" cy="12" r="1" fill="#fff"/></svg></div>
         <div><h1>Sir Fisher</h1><span>Painel de Gestão</span></div>
       </div>
-      <div class="head-meta"><select id="mesSel" onchange="renderMes(this.value)"></select><div class="unidade">Unidade PRAIA</div></div>
+      <div class="head-meta"><select id="mesSel" onchange="renderMes(this.value)"></select><div class="unidade">Visão geral</div></div>
     </div>
     <div class="head-line"></div>
   </header>
   <main id="main"><div class="loading">Carregando indicadores…</div></main>
-  <footer id="rodape" style="display:none"><span id="rodapeAtt"></span><span>Fonte: Stone · Banco do Brasil · lançamentos internos</span></footer>
+  <footer id="rodape" style="display:none">
+    <span id="rodapeAtt"></span>
+    <span>Fonte: Stone · Banco do Brasil · lançamentos internos · <a href="#" id="verCargas" style="color:var(--teal);text-decoration:none">histórico de cargas</a></span>
+  </footer>
+</div>
+<div id="cargasBox" style="display:none;position:fixed;inset:0;background:rgba(18,49,63,.45);z-index:60;align-items:center;justify-content:center;padding:20px">
+  <div style="background:#fff;border-radius:12px;max-width:420px;width:100%;max-height:80vh;overflow:auto;padding:18px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <strong style="font-size:14px">Histórico de cargas</strong>
+      <span id="fecharCargas" style="cursor:pointer;color:var(--muted);font-size:18px">&times;</span>
+    </div>
+    <div id="cargasLista" style="font-size:12px"></div>
+  </div>
 </div>
 <div id="tip"></div>
 
@@ -85,21 +104,24 @@ const SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYm
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
 const C={header:'#12313F',teal:'#00A6A6',amber:'#D6A84F',green:'#2E7D5B',red:'#C94C4C',muted:'#6B7280',border:'#E5E7EB',brown:'#B98A2E',grey:'#9aa6b2'};
 const MESES=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-let ROWS=[],COMP=[],SALDO={},CHARTS=[];
+let ROWS=[],COMP=[],SALDO={},MC={},CHARTS=[];
+let SALDO_REAL=null,ULTIMA=null,CARGAS=[];
 
 const DESC={
   fat:'Projeção de quanto o mês vai fechar, com base no ritmo de vendas até agora.',
   res:'Lucro do mês: receita menos todas as despesas operacionais.',
   lb:'Receita menos o custo direto (CMV). O que sobra antes das despesas fixas.',
-  mb:'Lucro bruto ÷ receita. Quanto % sobra de cada real após o custo do produto.',
+  mc:'Receita menos os custos que variam com a venda (insumo, taxa de cartão, imposto), em % da receita.',
   tk:'Valor médio por venda no cartão (faturamento ÷ nº de vendas).',
   nv:'Quantidade de transações no cartão no mês.',
   cmv:'Custo da Mercadoria Vendida em % da receita. Referência de restaurante: 28–35%.',
   pes:'Folha e encargos em % da receita. Acima de ~30% acende alerta.',
-  sal:'Saldo de caixa projetado para o último dia do mês selecionado.'
+  sal:'Saldo de caixa real no último dia com dado (Stone + Banco do Brasil).',
+  salp:'Saldo de caixa projetado para o último dia do mês selecionado.'
 };
 
 function brl(v){if(v==null||isNaN(v))return '—';const a=Math.abs(v);if(a>=1e6)return 'R$ '+(v/1e6).toFixed(2).replace('.',',')+' mi';if(a>=1e3)return 'R$ '+(v/1e3).toFixed(1).replace('.',',')+' mil';return 'R$ '+v.toFixed(0);}
+function brl0(v){if(v==null||isNaN(v))return '—';const a=Math.abs(v);if(a>=1e6)return 'R$ '+(v/1e6).toFixed(1).replace('.',',')+' mi';if(a>=1e3)return 'R$ '+Math.round(v/1e3)+' mil';return 'R$ '+v.toFixed(0);}
 function pct(v){return (v==null||isNaN(v))?'—':v.toFixed(1).replace('.',',')+'%';}
 function rs(v){return v==null?'—':'R$ '+Number(v).toFixed(2).replace('.',',');}
 function ic(p){return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+p+'</svg>';}
@@ -118,14 +140,22 @@ function kpi(label,iconKey,value,sub,color,descKey){
 
 async function main(){
   try{
-    const[r,comp,sfm]=await Promise.all([
+    const[r,comp,sfm,sr,mc,uc,cg]=await Promise.all([
       sb.from('painel_resumo_mensal').select('*').order('mes',{ascending:true}),
       sb.from('painel_composicao_despesa').select('*'),
-      sb.from('painel_saldo_fim_mes').select('ano_mes,saldo_fim,situacao')
+      sb.from('painel_saldo_fim_mes').select('ano_mes,saldo_fim,situacao'),
+      sb.from('painel_saldo_atual').select('*'),
+      sb.from('painel_margem_contribuicao').select('ano_mes,mc_perc'),
+      sb.from('painel_ultima_carga').select('ultima'),
+      sb.from('painel_cargas').select('*')
     ]);
     if(r.error)throw r.error;
     ROWS=r.data||[];COMP=comp.data||[];
     (sfm.data||[]).forEach(x=>SALDO[x.ano_mes]={v:Number(x.saldo_fim),s:x.situacao});
+    (mc.data||[]).forEach(x=>MC[x.ano_mes]=x.mc_perc==null?null:Number(x.mc_perc));
+    SALDO_REAL=(sr.data&&sr.data[0])?sr.data[0]:null;
+    ULTIMA=(uc.data&&uc.data[0])?uc.data[0].ultima:null;
+    CARGAS=cg.data||[];
 
     const opts=ROWS.filter(x=>Number(x.faturamento)>0);
     if(!opts.length)throw new Error('Sem dados de faturamento.');
@@ -134,8 +164,18 @@ async function main(){
     sel.value=opts[opts.length-1].ano_mes;
     renderMes(sel.value);
 
-    const a=new Date();
-    document.getElementById('rodapeAtt').textContent='Atualizado em '+String(a.getDate()).padStart(2,'0')+'/'+String(a.getMonth()+1).padStart(2,'0')+'/'+a.getFullYear()+' '+String(a.getHours()).padStart(2,'0')+':'+String(a.getMinutes()).padStart(2,'0');
+    // rodape: data/hora da ULTIMA CARGA (nao da abertura do site)
+    if(ULTIMA){
+      const d=new Date(ULTIMA);
+      document.getElementById('rodapeAtt').textContent='Atualizado em '+String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear()+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+    }else{
+      document.getElementById('rodapeAtt').textContent='Atualizado: —';
+    }
+    // historico de cargas
+    const lista=document.getElementById('cargasLista');
+    lista.innerHTML=CARGAS.length
+      ? CARGAS.map(c=>'<div style="padding:7px 0;border-bottom:1px solid var(--border)"><b>'+c.quando+'</b><br><span style="color:var(--muted)">'+c.fontes+'</span></div>').join('')
+      : '<div style="color:var(--muted)">Ainda sem registros de carga. Eles passam a aparecer aqui após a próxima importação.</div>';
     document.getElementById('rodape').style.display='flex';
   }catch(e){document.getElementById('main').innerHTML='<div class="erro">Não foi possível carregar os dados: '+(e.message||e)+'</div>';}
 }
@@ -144,25 +184,29 @@ function renderMes(anoMes){
   CHARTS.forEach(c=>{try{c.destroy()}catch(e){}});CHARTS=[];
   const idx=ROWS.findIndex(r=>r.ano_mes===anoMes);const cur=ROWS[idx];const prev=idx>0?ROWS[idx-1]:null;
   if(!cur)return;const N=v=>v==null?null:Number(v);
-  const fat=N(cur.faturamento_proj),fatPrev=prev?N(prev.faturamento):null;
-  const lb=N(cur.receita)-N(cur.cmv);const lbPrev=prev?(N(prev.receita)-N(prev.cmv)):null;
-  const mb=N(cur.receita)>0?(lb/N(cur.receita)*100):null;
-  const mbPrev=prev&&N(prev.receita)>0?((N(prev.receita)-N(prev.cmv))/N(prev.receita)*100):null;
   const resCor=N(cur.resultado)>=0?C.green:C.red;
-  const sal=SALDO[anoMes]||(cur.saldo_fim!=null?{v:Number(cur.saldo_fim),s:cur.saldo_situacao}:null);
+  const realiz=N(cur.faturamento);
+  // saldo projetado (fim do mes selecionado) + variacao vs fechamento do mes anterior
+  const salP=SALDO[anoMes]||null;
+  const salPprev=prev?SALDO[prev.ano_mes]:null;
+  // saldo em caixa real (foto do ultimo dia) - mesmo valor em qualquer mes
+  const sr=SALDO_REAL;
+  const dataRef=sr&&sr.data_ref?sr.data_ref.split('-').reverse().slice(0,2).join('/'):'';
+  const mc=MC[anoMes], mcPrev=prev?MC[prev.ano_mes]:null;
 
   const html=`
     <div class="section-title">Resumo do mês</div>
     <div class="kpis">
-      ${kpi('Faturamento (tend.)','cash',brl(fat),deltaPct(fat,fatPrev,false),C.header,'fat')}
+      ${kpi('Faturamento (tend.)','cash',brl0(N(cur.faturamento_proj)),deltaVal(N(cur.faturamento_proj),prev?N(prev.faturamento):null),C.header,'fat')}
+      ${kpi('Lucro bruto','margin',brl0(N(cur.receita)-N(cur.cmv)),deltaPct(N(cur.receita)-N(cur.cmv),prev?(N(prev.receita)-N(prev.cmv)):null,false),C.green,'lb')}
       ${kpi('Lucro líquido','result',brl(N(cur.resultado)),deltaVal(N(cur.resultado),prev?N(prev.resultado):null),resCor,'res')}
-      ${kpi('Lucro bruto','margin',brl(lb),deltaPct(lb,lbPrev,false),C.green,'lb')}
-      ${kpi('Margem bruta','margin',pct(mb),deltaPP(mb,mbPrev,false),C.header,'mb')}
-      ${kpi('Ticket médio','ticket',rs(cur.ticket_medio),'<div class="sub">'+(cur.qtd_vendas||0)+' vendas</div>',C.amber,'tk')}
+      ${kpi('Saldo em caixa','wallet',brl(sr?Number(sr.saldo_atual):null),(sr?('<div class="sub">saldo de '+dataRef+'</div>'+deltaVal(Number(sr.saldo_atual),sr.saldo_comp!=null?Number(sr.saldo_comp):null)):'<div class="sub">—</div>'),C.teal,'sal')}
+      ${kpi('Saldo projetado','wallet',brl(salP?salP.v:null),(salP?('<div class="sub">'+(salP.s==='Projetado'?'projeção fim do mês':'fim do mês')+'</div>'+deltaPct(salP.v,salPprev?salPprev.v:null,false)):'<div class="sub">—</div>'),C.amber,'salp')}
       ${kpi('Nº de vendas','orders',(cur.qtd_vendas||0).toLocaleString('pt-BR'),deltaPct(N(cur.qtd_vendas),prev?N(prev.qtd_vendas):null,false),C.teal,'nv')}
+      ${kpi('Ticket médio','ticket',rs(cur.ticket_medio),deltaPct(N(cur.ticket_medio),prev?N(prev.ticket_medio):null,false),C.amber,'tk')}
+      ${kpi('Margem contrib.','margin',pct(mc),deltaPP(mc,mcPrev,false),C.header,'mc')}
       ${kpi('CMV','box',pct(N(cur.cmv_perc)),deltaPP(N(cur.cmv_perc),prev?N(prev.cmv_perc):null,true),N(cur.cmv_perc)>38?C.red:C.amber,'cmv')}
       ${kpi('Custo de pessoal','people',pct(N(cur.pessoal_perc)),deltaPP(N(cur.pessoal_perc),prev?N(prev.pessoal_perc):null,true),N(cur.pessoal_perc)>30?C.red:C.teal,'pes')}
-      ${kpi('Saldo em caixa','wallet',brl(sal?sal.v:null),'<div class="sub">'+(sal&&sal.s==='Projetado'?'projeção fim do mês':'fim do mês')+'</div>',C.teal,'sal')}
     </div>
 
     <div class="section-title">Meta do mês</div>
@@ -187,16 +231,19 @@ function renderMes(anoMes){
     </div>
   `;
   document.getElementById('main').innerHTML=html;
-  drawBullet(fat,N(cur.meta),N(cur.perc_meta));
+  drawBullet(N(cur.faturamento),N(cur.faturamento_proj),N(cur.meta),N(cur.perc_meta));
   drawDia(anoMes);
   drawBars(anoMes);
 }
 
-function drawBullet(fat,meta,perc){
-  const scale=Math.max(fat,meta)*1.08;
-  const fillW=Math.min(fat/scale*100,100);const metaPos=meta/scale*100;
-  const acima=fat>=meta;const cor=acima?C.green:C.amber;
-  const diff=fat-meta;
+function drawBullet(realizado,proj,meta,perc){
+  realizado=realizado||0;proj=proj||0;meta=meta||0;
+  const scale=Math.max(proj,meta,realizado)*1.06||1;
+  const fillW=Math.min(realizado/scale*100,100);
+  const projPos=Math.min(proj/scale*100,100);
+  const metaPos=Math.min(meta/scale*100,100);
+  const acima=proj>=meta; // projeção vs meta (manchete)
+  const diff=proj-meta;
   const diffTxt=acima?('▲ '+brl(Math.abs(diff))+' acima da meta'):('▼ '+brl(Math.abs(diff))+' abaixo da meta');
   document.getElementById('bullet').innerHTML=`
     <div class="meta-top">
@@ -205,10 +252,15 @@ function drawBullet(fat,meta,perc){
     </div>
     <div class="bullet">
       <div class="bullet-track">
-        <div class="bullet-fill" style="width:${fillW}%;background:${cor}"></div>
-        <div class="bullet-meta" style="left:${metaPos}%"></div>
+        <div class="bullet-fill" style="width:${fillW}%;background:${C.green}"></div>
+        <div class="bullet-mark proj" style="left:${projPos}%"></div>
+        <div class="bullet-mark meta" style="left:${metaPos}%"></div>
       </div>
-      <div class="bullet-labels"><span>Tendência ${brl(fat)}</span><span>Meta ${brl(meta)}</span></div>
+      <div class="bullet-leg">
+        <span><i style="background:${C.green}"></i> Realizado ${brl(realizado)}</span>
+        <span><i class="tick" style="background:${C.teal}"></i> Projeção ${brl(proj)}</span>
+        <span><i class="tick" style="background:${C.amber}"></i> Meta ${brl(meta)}</span>
+      </div>
     </div>`;
 }
 
@@ -275,6 +327,12 @@ document.addEventListener('click',e=>{
   }else if(!e.target.closest('#tip')){tip.style.display='none';}
 });
 window.addEventListener('scroll',()=>tip.style.display='none');
+
+// modal de historico de cargas
+const cargasBox=document.getElementById('cargasBox');
+document.getElementById('verCargas').addEventListener('click',e=>{e.preventDefault();cargasBox.style.display='flex';});
+document.getElementById('fecharCargas').addEventListener('click',()=>cargasBox.style.display='none');
+cargasBox.addEventListener('click',e=>{if(e.target===cargasBox)cargasBox.style.display='none';});
 
 main();
 </script>
