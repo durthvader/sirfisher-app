@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sir Fisher · Vendas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root{--bg:#F7F5EF;--card:#FFFFFF;--header:#12313F;--text:#1F2933;--muted:#6B7280;--border:#E5E7EB;--teal:#00A6A6;--amber:#D6A84F;--green:#2E7D5B;--red:#C94C4C;}
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);color:var(--text);font-family:'Roboto',Arial,sans-serif;font-size:14px;line-height:1.4;-webkit-font-smoothing:antialiased;}
+  .app{max-width:960px;margin:0 auto;padding-bottom:30px;}
+  header{background:var(--header);color:#fff;position:sticky;top:0;z-index:10;}
+  .head-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:14px 18px 12px;}
+  .brand{display:flex;align-items:center;gap:9px;min-width:0;}
+  .brand .mark{width:30px;height:30px;border-radius:7px;background:var(--teal);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .brand .mark svg{width:18px;height:18px;}
+  .brand h1{font-size:16px;font-weight:700;letter-spacing:.2px;}
+  .brand span{font-size:10.5px;color:#9fb3bd;display:block;font-weight:400;}
+  .head-meta{text-align:right;flex-shrink:0;}
+  .head-meta select{background:#1b3d4d;color:#fff;border:1px solid #2c5468;border-radius:8px;padding:6px 10px;font-family:inherit;font-size:13px;font-weight:500;cursor:pointer;}
+  .head-meta .unidade{font-size:10.5px;color:#9fb3bd;margin-top:3px;}
+  /* navegacao entre as 6 paginas */
+  .tabs{display:flex;gap:1px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;border-top:1px solid #21465a;}
+  .tabs::-webkit-scrollbar{display:none;}
+  .tabs a,.tabs span{flex-shrink:0;padding:9px 13px 10px;font-size:12.5px;font-weight:500;color:#9fb3bd;text-decoration:none;border-bottom:2.5px solid transparent;white-space:nowrap;}
+  .tabs a:hover{color:#dce8ec;}
+  .tabs a.active{color:#fff;border-bottom-color:var(--teal);font-weight:700;}
+  .tabs span.soon{color:#52707d;cursor:default;}
+  main{padding:16px 14px 0;}
+  .section-title{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin:22px 4px 10px;}
+  .section-title:first-child{margin-top:6px;}
+  .nota{background:#eef4f3;border:1px solid #d6e6e2;border-radius:10px;padding:10px 12px;font-size:11.5px;color:#3f5c56;line-height:1.45;margin:2px 4px 4px;}
+  .nota b{color:#234b43;}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:11px;}
+  .kpi{background:var(--card);border:1px solid var(--border);border-radius:11px;padding:13px 14px;position:relative;overflow:hidden;}
+  .kpi .bar{position:absolute;left:0;top:0;bottom:0;width:4px;}
+  .kpi .label{font-size:11px;color:var(--muted);font-weight:500;margin-bottom:7px;display:flex;align-items:center;gap:5px;}
+  .kpi .label svg{width:13px;height:13px;opacity:.75;flex-shrink:0;}
+  .kpi .label .txt{flex:1;}
+  .kpi-info{width:15px;height:15px;border-radius:50%;border:1px solid var(--border);color:var(--muted);font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;}
+  .kpi-info:hover{background:var(--bg);}
+  .kpi .value{font-size:26px;font-weight:700;line-height:1.1;letter-spacing:-.5px;}
+  .kpi .value.txtval{font-size:21px;}
+  .kpi .sub{font-size:10.8px;margin-top:5px;color:var(--muted);}
+  .kpi .sub b{font-weight:700;}
+  .up{color:var(--green);}.down{color:var(--red);}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:15px 15px 13px;margin-bottom:14px;}
+  .card h3{font-size:14px;font-weight:700;margin-bottom:2px;}
+  .card .hint{font-size:11px;color:var(--muted);margin-bottom:12px;}
+  .chart-wrap{position:relative;width:100%;}
+  .h-line{height:230px;}.h-bars{height:230px;}.h-hora{height:230px;}.h-donut{height:210px;}
+  /* tabela de canais */
+  .tbl{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:6px;}
+  .tbl th{text-align:left;font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;font-weight:700;padding:5px 6px;border-bottom:1px solid var(--border);}
+  .tbl th.r,.tbl td.r{text-align:right;}
+  .tbl td{padding:7px 6px;border-bottom:1px solid #f0f0ec;}
+  .tbl tr:last-child td{border-bottom:0;}
+  .tbl .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px;vertical-align:baseline;}
+  .tbl tfoot td{font-weight:700;border-top:1px solid var(--border);border-bottom:0;padding-top:8px;}
+  /* estados */
+  .aguardando{padding:34px 14px;text-align:center;color:var(--muted);font-size:12px;line-height:1.5;}
+  .aguardando svg{width:22px;height:22px;opacity:.5;display:block;margin:0 auto 8px;}
+  /* placeholders em breve */
+  .soon-card{background:var(--card);border:1px dashed #d4cfc0;border-radius:12px;padding:18px 16px;margin-bottom:14px;position:relative;}
+  .soon-card .soon-badge{display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#9a7c2e;background:#f6efdb;border:1px solid #e6d6a8;border-radius:20px;padding:3px 9px;margin-bottom:9px;}
+  .soon-card .soon-badge svg{width:11px;height:11px;}
+  .soon-card h3{font-size:14px;font-weight:700;margin-bottom:4px;color:#3a4750;}
+  .soon-card p{font-size:11.5px;color:var(--muted);line-height:1.5;}
+  .soon-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;}
+  .soon-grid .soon-card{margin-bottom:0;}
+  footer{margin:18px 14px 0;padding-top:12px;border-top:1px solid var(--border);font-size:10px;color:var(--muted);display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px;}
+  .loading{padding:60px 0;text-align:center;color:var(--muted);font-size:13px;}
+  .erro{color:var(--red);font-size:12px;padding:14px;text-align:center;}
+  #tip{position:absolute;z-index:50;max-width:230px;background:var(--header);color:#fff;font-size:11.5px;line-height:1.45;padding:9px 11px;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.18);display:none;}
+  #tip::after{content:'';position:absolute;top:-5px;left:var(--ax,20px);border:5px solid transparent;border-bottom-color:var(--header);border-top:0;}
+  @media (max-width:430px){.kpi .value{font-size:23px;}.kpi .value.txtval{font-size:19px;}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="head-row">
+      <div class="brand">
+        <div class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-6 10-6 10 6 10 6-3 6-10 6S2 12 2 12z"/><circle cx="9" cy="12" r="1" fill="#fff"/></svg></div>
+        <div><h1>Sir Fisher</h1><span>Vendas &amp; Recebimentos</span></div>
+      </div>
+      <div class="head-meta"><select id="mesSel" onchange="renderMes(this.value)"></select><div class="unidade">Vendas</div></div>
+    </div>
+    <nav class="tabs">
+      <a href="home.html">Visão Geral</a>
+      <a href="vendas.html" class="active">Vendas</a>
+      <span class="soon" title="Em breve">Caixa</span>
+      <span class="soon" title="Em breve">DRE</span>
+      <span class="soon" title="Em breve">Despesas</span>
+      <span class="soon" title="Em breve">Conciliação</span>
+    </nav>
+  </header>
+  <main id="main"><div class="loading">Carregando recebimentos…</div></main>
+  <footer id="rodape" style="display:none">
+    <span id="rodapeAtt"></span>
+    <span>Fonte: Stone · iFood · 99food · Pix · lançamentos internos · <a href="#" id="verCargas" style="color:var(--teal);text-decoration:none">histórico de cargas</a></span>
+  </footer>
+</div>
+<div id="cargasBox" style="display:none;position:fixed;inset:0;background:rgba(18,49,63,.45);z-index:60;align-items:center;justify-content:center;padding:20px">
+  <div style="background:#fff;border-radius:12px;max-width:420px;width:100%;max-height:80vh;overflow:auto;padding:18px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <strong style="font-size:14px">Histórico de cargas</strong>
+      <span id="fecharCargas" style="cursor:pointer;color:var(--muted);font-size:18px">&times;</span>
+    </div>
+    <div id="cargasLista" style="font-size:12px"></div>
+  </div>
+</div>
+<div id="tip"></div>
+
+<script>
+const SUPABASE_URL="https://qqefegpievdlaprwzktx.supabase.co";
+const SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFxZWZlZ3BpZXZkbGFwcnd6a3R4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI0ODQxNzAsImV4cCI6MjA5ODA2MDE3MH0.1h_585aBtTnXtA0FLtbNvhkYpVokgfHbUpKcAIBImKY";
+const sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
+const C={header:'#12313F',teal:'#00A6A6',amber:'#D6A84F',green:'#2E7D5B',red:'#C94C4C',muted:'#6B7280',border:'#E5E7EB',brown:'#B98A2E',grey:'#9aa6b2'};
+const MESES=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+const DOW_NOME=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+let MONTHS=[],RESUMO=[],CHARTS=[],ULTIMA=null,CARGAS=[];
+
+const DESC={
+  rec:'Total líquido recebido no mês, somando todos os canais (cartão, Pix, apps e a sangria do dinheiro).',
+  ntx:'Quantidade de pagamentos no mês nos canais com transação registrada (cartão, Pix, apps). Não inclui o dinheiro, que entra como total diário.',
+  tkt:'Valor médio por pagamento nos canais transacionais. Atenção: não é o ticket por cliente — o dinheiro entra agregado e uma mesma conta pode se dividir em mais de uma forma de pagamento.',
+  lider:'Canal que mais trouxe receita no mês e sua participação no total recebido.'
+};
+
+function brl(v){if(v==null||isNaN(v))return '—';const a=Math.abs(v);if(a>=1e6)return 'R$ '+(v/1e6).toFixed(2).replace('.',',')+' mi';if(a>=1e3)return 'R$ '+(v/1e3).toFixed(1).replace('.',',')+' mil';return 'R$ '+v.toFixed(0);}
+function brl0(v){if(v==null||isNaN(v))return '—';const a=Math.abs(v);if(a>=1e6)return 'R$ '+(v/1e6).toFixed(1).replace('.',',')+' mi';if(a>=1e3)return 'R$ '+Math.round(v/1e3)+' mil';return 'R$ '+v.toFixed(0);}
+function pct(v){return (v==null||isNaN(v))?'—':v.toFixed(1).replace('.',',')+'%';}
+function rs(v){return v==null?'—':'R$ '+Number(v).toFixed(2).replace('.',',');}
+function ic(p){return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+p+'</svg>';}
+const ICON={cash:'<path d="M2 7h20v10H2z"/><circle cx="12" cy="12" r="2.5"/>',orders:'<path d="M6 2l1.5 4h9L18 2"/><path d="M5 6h14l-1 14H6L5 6z"/>',ticket:'<path d="M3 8h18v8H3z"/><path d="M9 8v8"/>',star:'<path d="M12 3l2.5 6 6.5.5-5 4 1.6 6.4L12 16.8 5.9 19.9 7.5 13.5l-5-4 6.5-.5z"/>',clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',lock:'<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/>'};
+
+function deltaVal(c,p){if(p==null||c==null)return '<div class="sub">vs mês anterior: —</div>';const d=c-p;return '<div class="sub '+(d>=0?'up':'down')+'"><b>'+(d>=0?'+':'−')+brl(Math.abs(d))+'</b> vs mês anterior</div>';}
+function deltaPct(c,p){if(p==null||!isFinite(p)||p===0||c==null)return '<div class="sub">vs mês anterior: —</div>';const d=(c-p)/Math.abs(p)*100;return '<div class="sub '+(d>=0?'up':'down')+'"><b>'+(d>=0?'+':'')+d.toFixed(1).replace('.',',')+'%</b> vs mês anterior</div>';}
+
+function kpi(label,iconKey,value,sub,color,descKey,txtClass){
+  return '<div class="kpi"><span class="bar" style="background:'+(color||C.teal)+'"></span>'+
+    '<div class="label">'+ic(ICON[iconKey])+'<span class="txt">'+label+'</span>'+
+    '<span class="kpi-info" data-desc="'+DESC[descKey]+'">i</span></div>'+
+    '<div class="value'+(txtClass?' txtval':'')+'" style="color:'+(color&&color!==C.teal?color:C.text)+'">'+value+'</div>'+(sub||'')+'</div>';
+}
+
+// normaliza o rotulo do canal vindo do banco -> {label, cor}. Robusto a variacoes de texto.
+function normCanal(raw){
+  const s=(raw||'').toString().toLowerCase();
+  if(s.includes('ifood'))                              return {label:'iFood',   cor:C.red};
+  if(s.includes('99'))                                 return {label:'99food',  cor:C.amber};
+  if(s.includes('pix'))                                return {label:'Pix',     cor:C.green};
+  if(s.includes('cred')||s.includes('créd'))           return {label:'Crédito', cor:C.header};
+  if(s.includes('deb')||s.includes('déb'))             return {label:'Débito',  cor:C.teal};
+  if(s.includes('espec')||s.includes('dinheiro')||s.includes('sangria')) return {label:'Espécie', cor:C.brown};
+  return {label:(raw||'Outros'), cor:C.grey};
+}
+
+function aguardando(msg){
+  return '<div class="aguardando">'+ic(ICON.clock)+(msg||'Aguardando dados. Este bloco é preenchido quando a base de recebimentos for integrada.')+'</div>';
+}
+
+async function main(){
+  try{
+    // meses para o seletor: reaproveita a view que ja existe (mantem a pagina viva mesmo sem as views de recebimento)
+    const mRes=await sb.from('painel_resumo_mensal').select('ano_mes,mes,faturamento').order('mes',{ascending:true});
+    if(mRes.error)throw mRes.error;
+    MONTHS=(mRes.data||[]).filter(x=>Number(x.faturamento)>0);
+
+    // resumo de recebimento (pode ainda nao existir -> segue vazio, blocos mostram "aguardando")
+    const rRes=await sb.from('painel_recebimento_resumo').select('*').order('mes',{ascending:true});
+    RESUMO=rRes.error?[]:(rRes.data||[]);
+
+    // footer: ultima carga + historico (views ja existentes)
+    const [uc,cg]=await Promise.all([
+      sb.from('painel_ultima_carga').select('ultima'),
+      sb.from('painel_cargas').select('*')
+    ]);
+    ULTIMA=(!uc.error&&uc.data&&uc.data[0])?uc.data[0].ultima:null;
+    CARGAS=cg.error?[]:(cg.data||[]);
+
+    if(!MONTHS.length)throw new Error('Sem meses disponíveis.');
+    const sel=document.getElementById('mesSel');
+    sel.innerHTML=MONTHS.map(x=>{const d=new Date(x.mes);return '<option value="'+x.ano_mes+'">'+MESES[d.getUTCMonth()]+' '+d.getUTCFullYear()+'</option>';}).reverse().join('');
+    sel.value=MONTHS[MONTHS.length-1].ano_mes;
+    renderMes(sel.value);
+
+    if(ULTIMA){const d=new Date(ULTIMA);document.getElementById('rodapeAtt').textContent='Atualizado em '+String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear()+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');}
+    else{document.getElementById('rodapeAtt').textContent='Atualizado: —';}
+    const lista=document.getElementById('cargasLista');
+    lista.innerHTML=CARGAS.length
+      ? CARGAS.map(c=>'<div style="padding:7px 0;border-bottom:1px solid var(--border)"><b>'+c.quando+'</b><br><span style="color:var(--muted)">'+c.fontes+'</span></div>').join('')
+      : '<div style="color:var(--muted)">Ainda sem registros de carga.</div>';
+    document.getElementById('rodape').style.display='flex';
+  }catch(e){document.getElementById('main').innerHTML='<div class="erro">Não foi possível carregar os dados: '+(e.message||e)+'</div>';}
+}
+
+function renderMes(anoMes){
+  CHARTS.forEach(c=>{try{c.destroy()}catch(e){}});CHARTS=[];
+  const idx=RESUMO.findIndex(r=>r.ano_mes===anoMes);
+  const cur=idx>=0?RESUMO[idx]:null;
+  const prev=idx>0?RESUMO[idx-1]:null;
+  const N=v=>v==null?null:Number(v);
+
+  // KPIs (dependem de painel_recebimento_resumo; sem a view, mostram "—")
+  let kpisHtml;
+  if(cur){
+    const total=N(cur.recebido_total);
+    const ntx=N(cur.qtd_transacoes);
+    const tkt=N(cur.ticket_transacao);
+    kpisHtml=`<div class="kpis">
+      ${kpi('Recebido no mês','cash',brl0(total),deltaVal(total,prev?N(prev.recebido_total):null),C.header,'rec')}
+      ${kpi('Nº de transações','orders',(ntx==null?'—':ntx.toLocaleString('pt-BR')),deltaPct(ntx,prev?N(prev.qtd_transacoes):null),C.teal,'ntx')}
+      ${kpi('Ticket por transação','ticket',rs(tkt),deltaPct(tkt,prev?N(prev.ticket_transacao):null),C.amber,'tkt')}
+      ${kpi('Canal líder','star','<span id="kpiLiderVal">—</span>','<div class="sub" id="kpiLiderSub">—</div>',C.green,'lider',true)}
+    </div>`;
+  }else{
+    kpisHtml=`<div class="kpis">
+      ${kpi('Recebido no mês','cash','—','<div class="sub">aguardando dados</div>',C.header,'rec')}
+      ${kpi('Nº de transações','orders','—','<div class="sub">aguardando dados</div>',C.teal,'ntx')}
+      ${kpi('Ticket por transação','ticket','—','<div class="sub">aguardando dados</div>',C.amber,'tkt')}
+      ${kpi('Canal líder','star','—','<div class="sub">aguardando dados</div>',C.green,'lider',true)}
+    </div>`;
+  }
+
+  const html=`
+    <div class="section-title">Recebimentos do mês</div>
+    <div class="nota">Hoje esta página mostra <b>recebimentos</b>, não vendas: valor que entrou por canal, já considerando que dinheiro chega como sangria diária e o cartão/app pode ter taxa. <b>Venda item a item</b> entra nas seções marcadas como “em breve”.</div>
+    ${kpisHtml}
+
+    <div class="section-title">Mix por canal</div>
+    <div class="card">
+      <h3>De onde vem o recebimento</h3>
+      <div class="hint">Participação de cada forma de pagamento no mês</div>
+      <div class="chart-wrap h-donut"><canvas id="donut"></canvas></div>
+      <div id="canalTbl"></div>
+    </div>
+
+    <div class="section-title">Trajetória</div>
+    <div class="card">
+      <h3>Recebido por dia</h3>
+      <div class="hint">Quanto entrou a cada dia do mês (todos os canais)</div>
+      <div class="chart-wrap h-line"><canvas id="diario"></canvas></div>
+    </div>
+    <div class="card">
+      <h3>Por dia da semana</h3>
+      <div class="hint">Soma do mês por dia da semana — orienta escala de equipe e compras</div>
+      <div class="chart-wrap h-bars"><canvas id="dow"></canvas></div>
+    </div>
+
+    <div class="section-title">Por hora</div>
+    <div class="card">
+      <h3>Recebido por hora do dia</h3>
+      <div class="hint">Só canais com transação (cartão, Pix, apps); o dinheiro entra agregado e fica de fora</div>
+      <div class="chart-wrap h-hora"><canvas id="hora"></canvas></div>
+    </div>
+
+    <div class="section-title">Venda item a item</div>
+    <div class="soon-grid">
+      <div class="soon-card">
+        <span class="soon-badge">${ic(ICON.lock)} Em breve</span>
+        <h3>Top produtos (Pareto)</h3>
+        <p>Ranking dos itens que mais faturam e quanto representam do total. Disponível quando o lançamento de vendas item a item for integrado.</p>
+      </div>
+      <div class="soon-card">
+        <span class="soon-badge">${ic(ICON.lock)} Em breve</span>
+        <h3>Mix de pratos</h3>
+        <p>Distribuição da venda entre categorias e pratos do cardápio, para decidir mix e encarte.</p>
+      </div>
+      <div class="soon-card">
+        <span class="soon-badge">${ic(ICON.lock)} Em breve</span>
+        <h3>Ticket médio por cliente</h3>
+        <p>Valor médio real por conta/mesa, somando todas as formas de pagamento de cada venda. Hoje só dá para estimar o ticket por transação de cartão/Pix.</p>
+      </div>
+    </div>
+  `;
+  document.getElementById('main').innerHTML=html;
+
+  drawCanal(anoMes);
+  drawDiario(anoMes);
+  drawHora(anoMes);
+}
+
+Chart.defaults.font.family="'Roboto',Arial,sans-serif";Chart.defaults.color=C.muted;
+
+async function drawCanal(anoMes){
+  const wrap=document.getElementById('donut').parentElement;
+  const tbl=document.getElementById('canalTbl');
+  const {data,error}=await sb.from('painel_recebimento_canal').select('canal,valor,qtd').eq('ano_mes',anoMes);
+  if(error||!data||!data.length){wrap.innerHTML=aguardando();tbl.innerHTML='';return;}
+  const rows=data.map(r=>{const n=normCanal(r.canal);return {label:n.label,cor:n.cor,valor:Number(r.valor)||0,qtd:r.qtd==null?null:Number(r.qtd)};}).sort((a,b)=>b.valor-a.valor);
+  const total=rows.reduce((s,r)=>s+r.valor,0)||1;
+
+  // KPI canal lider
+  const liderVal=document.getElementById('kpiLiderVal');const liderSub=document.getElementById('kpiLiderSub');
+  if(liderVal&&rows.length){liderVal.textContent=rows[0].label;liderSub.innerHTML='<b>'+pct(rows[0].valor/total*100)+'</b> do recebido';}
+
+  CHARTS.push(new Chart(document.getElementById('donut'),{type:'doughnut',
+    data:{labels:rows.map(r=>r.label),datasets:[{data:rows.map(r=>r.valor),backgroundColor:rows.map(r=>r.cor),borderColor:'#fff',borderWidth:2}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'62%',
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+c.label+': '+brl(c.parsed)+' ('+pct(c.parsed/total*100)+')'}}}}}));
+
+  tbl.innerHTML='<table class="tbl"><thead><tr><th>Canal</th><th class="r">Recebido</th><th class="r">%</th><th class="r">Transações</th></tr></thead><tbody>'+
+    rows.map(r=>'<tr><td><span class="dot" style="background:'+r.cor+'"></span>'+r.label+'</td><td class="r">'+brl(r.valor)+'</td><td class="r">'+pct(r.valor/total*100)+'</td><td class="r">'+(r.qtd==null?'—':r.qtd.toLocaleString('pt-BR'))+'</td></tr>').join('')+
+    '</tbody><tfoot><tr><td>Total</td><td class="r">'+brl(total)+'</td><td class="r">100%</td><td class="r"></td></tr></tfoot></table>';
+}
+
+async function drawDiario(anoMes){
+  const wrapD=document.getElementById('diario').parentElement;
+  const wrapW=document.getElementById('dow').parentElement;
+  const {data,error}=await sb.from('painel_recebimento_diario').select('data,valor').eq('ano_mes',anoMes).order('data',{ascending:true});
+  if(error||!data||!data.length){wrapD.innerHTML=aguardando();wrapW.innerHTML=aguardando('Aguardando dados de recebimento diário.');return;}
+  const d=data.map(r=>({data:r.data,valor:Number(r.valor)||0}));
+  const labels=d.map(r=>r.data.split('-')[2]);
+  const valores=d.map(r=>r.valor);
+  CHARTS.push(new Chart(document.getElementById('diario'),{type:'line',
+    data:{labels,datasets:[{label:'Recebido',data:valores,borderColor:C.teal,backgroundColor:'rgba(0,166,166,.12)',borderWidth:2,fill:true,pointRadius:0,tension:.25}]},
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+brl(c.parsed.y)}}},
+      scales:{y:{grid:{color:C.border},ticks:{callback:v=>brl(v),font:{size:10}}},x:{grid:{display:false},ticks:{font:{size:9},maxRotation:0,autoSkip:true,maxTicksLimit:16}}}}}));
+
+  // dia da semana derivado do diario
+  const acc=[0,0,0,0,0,0,0];
+  d.forEach(r=>{const dt=new Date(r.data+'T00:00:00');acc[dt.getDay()]+=r.valor;});
+  CHARTS.push(new Chart(document.getElementById('dow'),{type:'bar',
+    data:{labels:DOW_NOME,datasets:[{data:acc,backgroundColor:C.header,borderRadius:4,maxBarThickness:34}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+brl(c.parsed.y)}}},
+      scales:{y:{grid:{color:C.border},ticks:{callback:v=>brl(v),font:{size:10}}},x:{grid:{display:false},ticks:{font:{size:11},color:C.text}}}}}));
+}
+
+async function drawHora(anoMes){
+  const wrap=document.getElementById('hora').parentElement;
+  const {data,error}=await sb.from('painel_recebimento_hora').select('hora,valor').eq('ano_mes',anoMes).order('hora',{ascending:true});
+  if(error||!data||!data.length){wrap.innerHTML=aguardando('Aguardando hora do pagamento por transação.');return;}
+  const d=data.map(r=>({hora:Number(r.hora),valor:Number(r.valor)||0})).sort((a,b)=>a.hora-b.hora);
+  CHARTS.push(new Chart(document.getElementById('hora'),{type:'bar',
+    data:{labels:d.map(r=>String(r.hora).padStart(2,'0')+'h'),datasets:[{data:d.map(r=>r.valor),backgroundColor:C.teal,borderRadius:3,maxBarThickness:26}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+brl(c.parsed.y)}}},
+      scales:{y:{grid:{color:C.border},ticks:{callback:v=>brl(v),font:{size:10}}},x:{grid:{display:false},ticks:{font:{size:9},maxRotation:0,autoSkip:false}}}}}));
+}
+
+// tooltip dos KPIs (toque e mouse)
+const tip=document.getElementById('tip');
+document.addEventListener('click',e=>{
+  const info=e.target.closest('.kpi-info');
+  if(info){
+    e.stopPropagation();
+    tip.textContent=info.getAttribute('data-desc');
+    tip.style.display='block';
+    const r=info.getBoundingClientRect();
+    let left=r.left+window.scrollX-20;
+    const maxLeft=window.scrollX+document.documentElement.clientWidth-tip.offsetWidth-8;
+    if(left>maxLeft)left=maxLeft; if(left<8)left=8;
+    tip.style.left=left+'px';
+    tip.style.top=(r.bottom+window.scrollY+8)+'px';
+    tip.style.setProperty('--ax',(r.left+window.scrollX-left)+'px');
+  }else if(!e.target.closest('#tip')){tip.style.display='none';}
+});
+window.addEventListener('scroll',()=>tip.style.display='none');
+
+// modal de historico de cargas
+const cargasBox=document.getElementById('cargasBox');
+document.getElementById('verCargas').addEventListener('click',e=>{e.preventDefault();cargasBox.style.display='flex';});
+document.getElementById('fecharCargas').addEventListener('click',()=>cargasBox.style.display='none');
+cargasBox.addEventListener('click',e=>{if(e.target===cargasBox)cargasBox.style.display='none';});
+
+main();
+</script>
+</body>
+</html>
