@@ -142,22 +142,40 @@ function kpi(label,iconKey,value,sub,color,descKey){
 
 function sumMes(arr,anoMes){return arr.filter(r=>r.dia&&r.dia.slice(0,7)===anoMes).reduce((s,r)=>s+(Number(r.valor)||0),0);}
 
+// re-tenta a consulta quando o erro e um timeout transitorio do banco
+// (57014 / "statement timeout"). Erros nao-transitorios saem na hora.
+async function q(build,tries=3){
+  let res;
+  for(let i=0;i<tries;i++){
+    res=await build();
+    if(!res.error)return res;
+    const msg=(res.error.message||'')+(res.error.code||'');
+    if(!/statement timeout|57014/i.test(msg))break;
+    await new Promise(r=>setTimeout(r,250*(i+1)));
+  }
+  return res;
+}
+
+let FLUXO_ERRO=false;
+
 async function main(){
   try{
     const [sa,fm,fx,rc,rp,df,dd,uc,cg]=await Promise.all([
-      sb.from('painel_saldo_atual').select('*'),
-      sb.from('painel_saldo_fim_mes').select('*').order('mes',{ascending:true}),
-      sb.from('painel_fluxo_caixa').select('*').order('dia',{ascending:true}),
-      sb.from('recebimento_conhecido').select('*'),
-      sb.from('recebimento_projetado').select('*'),
-      sb.from('projecao_despesa_fixa').select('*'),
-      sb.from('projecao_despesa_direta').select('*'),
-      sb.from('painel_ultima_carga').select('ultima'),
-      sb.from('painel_cargas').select('*')
+      q(()=>sb.from('painel_saldo_atual').select('*')),
+      q(()=>sb.from('painel_saldo_fim_mes').select('*').order('mes',{ascending:true})),
+      q(()=>sb.from('painel_fluxo_caixa').select('*').order('dia',{ascending:true})),
+      q(()=>sb.from('recebimento_conhecido').select('*')),
+      q(()=>sb.from('recebimento_projetado').select('*')),
+      q(()=>sb.from('projecao_despesa_fixa').select('*')),
+      q(()=>sb.from('projecao_despesa_direta').select('*')),
+      q(()=>sb.from('painel_ultima_carga').select('ultima')),
+      q(()=>sb.from('painel_cargas').select('*'))
     ]);
-    const ct=await sb.from('painel_saldo_por_conta').select('*');
+    const ct=await q(()=>sb.from('painel_saldo_por_conta').select('*'));
     CONTAS=ct.error?[]:(ct.data||[]);
-    if(fx.error)throw fx.error;
+    // uma falha no fluxo nao derruba mais a pagina: mostra o resto e um
+    // aviso no grafico da curva. So aborta se nada essencial carregou.
+    FLUXO_ERRO=!!fx.error;
     SALDO_ATUAL=(!sa.error&&sa.data&&sa.data[0])?sa.data[0]:null;
     FIMMES=fm.error?[]:(fm.data||[]);
     FLUXO=fx.data||[];
@@ -278,7 +296,12 @@ function marks(hojeIdx,hojeVal,minIdx,minVal,refIdx,refLabel,refVal){return {id:
 }};}
 
 function drawCurva(anoMes){
-  if(!FLUXO.length){document.getElementById('curva').parentElement.innerHTML='<div class="aguardando">Sem dados de fluxo de caixa.</div>';return;}
+  if(!FLUXO.length){
+    document.getElementById('curva').parentElement.innerHTML=FLUXO_ERRO
+      ? '<div class="aguardando">Não foi possível carregar a projeção de caixa agora.<br><a href="#" onclick="location.reload();return false" style="color:var(--teal);text-decoration:none">Tentar novamente</a></div>'
+      : '<div class="aguardando">Sem dados de fluxo de caixa.</div>';
+    return;
+  }
   // janela movel: ancorada no ULTIMO DIA DO MES SELECIONADO -> 6 meses pra tras / 90 dias pra frente.
   // quando o mes selecionado e o atual, isso equivale a 6m atras / 90d a frente de hoje.
   let win=FLUXO;

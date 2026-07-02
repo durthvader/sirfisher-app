@@ -296,6 +296,41 @@ def gravar(registros):
             conn.close()
 
 
+# ---- atualizacao do painel -----------------------------------------
+def atualizar_painel():
+    """Atualiza o snapshot do painel (mv_fluxo_caixa_diario) via refresh_painel().
+
+    Best-effort: roda numa conexao propria, depois da carga ja comitada.
+    Se a funcao ainda nao existir (migration nao aplicada) ou falhar,
+    apenas avisa -- a importacao ja esta salva e nao e desfeita.
+    """
+    import os
+    import psycopg2
+
+    try:
+        from dotenv import load_dotenv
+        load_dotenv()
+    except ImportError:
+        pass
+
+    url = os.environ.get('DATABASE_URL')
+
+    if not url:
+        print("  AVISO: DATABASE_URL nao encontrada; painel nao atualizado.")
+        return
+
+    try:
+        conn = psycopg2.connect(url)
+        conn.autocommit = True
+        cur = conn.cursor()
+        cur.execute("select refresh_painel();")
+        cur.close()
+        conn.close()
+        print("  painel atualizado (mv_fluxo_caixa_diario).")
+    except Exception as e:
+        print(f"  AVISO: nao foi possivel atualizar o painel: {e}")
+
+
 # ---- main -----------------------------------------------------------
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith('--')]
@@ -319,6 +354,9 @@ def main():
     else:
         print("\n== Gravando no banco ==")
         gravar(registros)
+
+        print("\n== Atualizando painel ==")
+        atualizar_painel()
 
     print("\nOK.")
 
